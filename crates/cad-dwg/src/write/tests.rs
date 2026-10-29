@@ -712,7 +712,7 @@ fn small_sections_follow_autocads() {
     assert_eq!(super::sections::aux_header(&d, seed, 1), acad("AcDb:AuxHeader"), "auxiliary header");
     assert_eq!(super::sections::summary_info(&d), acad("AcDb:SummaryInfo"), "summary information");
 
-    let (name, version) = ("BlackCAD", "0.7.0");
+    let (name, version) = ("ExampleCAD", "0.7.0");
     let theirs = acad("AcDb:AppInfoHistory");
     let ours = super::sections::app_info_history(&d, true, name, version);
     assert_eq!(&ours[..36], &theirs[..36], "history start");

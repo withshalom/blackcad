@@ -1,8 +1,8 @@
 # cad-dxf
 
-BlackCAD's DXF reader and writer.
+A DXF reader and writer, in Rust.
 
-- **Reads** ASCII and binary DXF into a [`blackcad-model`](https://crates.io/crates/blackcad-model)
+- **Reads** ASCII and binary DXF into a [`cad-model`](https://crates.io/crates/cad-model)
   drawing, from AutoCAD's own files down to files with nothing but an
   ENTITIES section.
 - **Writes** the whole drawing database as an AutoCAD 2018 (AC1032) DXF,
@@ -27,7 +27,7 @@ match cad_dxf::to_bytes_within(&drawing, cad_dxf::DxfFormat::Ascii, &opts, 256 <
 }
 ```
 
-Rust standard library only, no `unsafe` code; depends on `blackcad-model` and
+Rust standard library only, no `unsafe` code; depends on `cad-model` and
 `cad-dwg`.
 
 ## License
@@ -35,8 +35,8 @@ Rust standard library only, no `unsafe` code; depends on `blackcad-model` and
 Licensed under either of the
 [MIT License](https://github.com/withshalom/CAD/blob/main/crates/cad-dxf/LICENSE-MIT) or the
 [Apache License, Version 2.0](https://github.com/withshalom/CAD/blob/main/crates/cad-dxf/LICENSE-APACHE),
-at your option. The rest of the BlackCAD repository is proprietary; see its
-top-level `LICENSE`.
+at your option. Only the open crates of the repository they come from
+are open source; the rest of it is proprietary (its top-level `LICENSE`).
 
 The format knowledge comes from Autodesk's published DXF reference; the
 clean-room record is in the repository's `docs/PROVENANCE.md`.

@@ -17,7 +17,11 @@ change to the native format (2.10) or to what BlackCAD writes.
   counted exactly per format (`encode::encoded_len`); a file within the
   limit is the one `to_bytes_with` writes. Programs converting DWG to DXF
   under a limit (CADCraft) use it.
-- Packaging: `blackcad-model`, `cad-dwg`, `cad-dxf` and `cad-native` carry
+- The drawing model crate is `cad-model` again (it was `blackcad-model`
+  briefly, never published), and the three crates published to crates.io,
+  `cad-model`, `cad-dwg` and `cad-dxf`, describe themselves without the
+  BlackCAD name. `cad-native` stays unpublished for now.
+- Packaging: `cad-model`, `cad-dwg`, `cad-dxf` and `cad-native` carry
   crates.io metadata (repository, readme, keywords, categories), their
   path dependencies carry versions, and their READMEs link to crates.io
   and GitHub instead of relative paths. `.github/workflows/publish-crates.yml`

@@ -1,6 +1,6 @@
 [package]
-name = "blackcad-model"
-description = "BlackCAD's drawing database: objects keyed by DWG handles, tables, entities, geometry and text code pages"
+name = "cad-model"
+description = "A drawing database for DWG and DXF: objects keyed by DWG handles, tables, entities, geometry and text code pages"
 version.workspace = true
 authors = ["WithShalom <design@withshalom.com>"]
 edition.workspace = true

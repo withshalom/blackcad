@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "blackcad-model"
+name = "cad-model"
 version = "0.18.0"
 
 [[package]]
@@ -17,7 +17,7 @@ dependencies = [
 name = "cad-core"
 version = "0.18.0"
 dependencies = [
- "blackcad-model",
+ "cad-model",
  "cad-dwg",
  "cad-dxf",
  "cad-native",
@@ -27,7 +27,7 @@ dependencies = [
 name = "cad-dwg"
 version = "0.18.0"
 dependencies = [
- "blackcad-model",
+ "cad-model",
  "cad-dxf",
 ]
 
@@ -35,7 +35,7 @@ dependencies = [
 name = "cad-dxf"
 version = "0.18.0"
 dependencies = [
- "blackcad-model",
+ "cad-model",
  "cad-dwg",
 ]
 
@@ -50,7 +50,7 @@ dependencies = [
 name = "cad-native"
 version = "0.18.0"
 dependencies = [
- "blackcad-model",
+ "cad-model",
  "cad-dwg",
 ]
 

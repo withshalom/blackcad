@@ -1,4 +1,4 @@
-//! BlackCAD's DWG reader and writer.
+//! A DWG reader and writer.
 //!
 //! Reading: [`read_bytes`] turns a DWG file of any version from R13 to
 //! AutoCAD 2018 and later (AC1012–AC1032) into a [`Drawing`], except
@@ -6,8 +6,8 @@
 //! Writing: [`write::to_bytes`] writes a drawing as an AutoCAD 2018
 //! (AC1032) file.
 //!
-//! The drawing is `blackcad-model`'s database, re-exported here as
-//! [`blackcad_model`].
+//! The drawing is `cad-model`'s database, re-exported here as
+//! [`cad_model`].
 //!
 //! Reading, step by step: detect the version → extract sections from the
 //! container
@@ -31,9 +31,9 @@
     )
 )]
 
-pub use blackcad_model;
-pub use blackcad_model::version;
-use blackcad_model::{error, geom, model, text};
+pub use cad_model;
+pub use cad_model::version;
+use cad_model::{error, geom, model, text};
 
 pub mod bits;
 pub mod crc;

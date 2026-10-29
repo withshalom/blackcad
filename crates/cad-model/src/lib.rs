@@ -1,5 +1,5 @@
-//! BlackCAD's drawing database, shared by its DWG and DXF codecs
-//! (`cad-dwg`, `cad-dxf`) and by the CAD core (`cad-core`).
+//! A drawing database for DWG and DXF, shared by the DWG and DXF codecs
+//! (`cad-dwg`, `cad-dxf`).
 //!
 //! - [`model`]: the drawing database, keyed by DWG-style handles, and
 //!   editing (layers, records, new entities), with undoable changes
