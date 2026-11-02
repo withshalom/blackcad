@@ -38,7 +38,7 @@ name the format and its code, not the product.
   DXF and `.blc` readers and writers are crates of their own
   (`cad-model`, `cad-dwg`, `cad-dxf`, `cad-native`), licensed MIT OR
   Apache-2.0 so that other programs can read and write DWG and `.blc`
-  with them; `cad-core` builds on them and keeps everything else. They
+  with them; `cad-core` builds on them. They
   take nothing from the core: where a file needs something only the
   program has (its name, a preview, its font's text widths, its hatch
   pattern library), the writer takes it as an option.

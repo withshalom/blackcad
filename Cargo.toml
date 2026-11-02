@@ -15,7 +15,7 @@ members = [
 version = "0.17.0"
 edition = "2024"
 rust-version = "1.87"
-license = "LicenseRef-Proprietary"
+license = "MIT OR Apache-2.0"
 publish = false
 
 # No third-party crates anywhere in this workspace. Everything is written

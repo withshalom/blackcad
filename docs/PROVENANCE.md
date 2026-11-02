@@ -33,8 +33,9 @@ before commercial release.
 
 Since 0.8.0 the drawing database and the DWG and DXF readers and writers
 are crates of their own (`crates/cad-model`, `crates/cad-dwg`,
-`crates/cad-dxf`), licensed MIT OR Apache-2.0; the rest stays
-proprietary (`LICENSE`). Since 0.10.0 the native `.blc` format and the
+`crates/cad-dxf`), licensed MIT OR Apache-2.0; the rest was
+proprietary until 0.19.0, when the whole repository became MIT OR
+Apache-2.0 (`LICENSE-MIT`, `LICENSE-APACHE`). Since 0.10.0 the native `.blc` format and the
 DEFLATE, zlib and SHA-256 code it uses are a fourth such crate
 (`crates/cad-native`), so that other programs (first the owner's fork of
 CADCraft) can read and write `.blc`. The moves changed where the code

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- Licensing: the whole repository is MIT OR Apache-2.0 (`LICENSE-MIT`,
+  `LICENSE-APACHE`), not only the four format crates. `LICENSE` (the
+  proprietary notice) is removed and `NOTICE` names code taken from other
+  projects.
+
 ## 0.17.0 (2026-10-22)
 The native format's container and tagged records are public, so CADCraft's
 `.cad` can keep its own records in the same container. No change to the

@@ -29,7 +29,7 @@ Rust standard library only, no `unsafe` code; depends on `cad-model`.
 
 Licensed under either of the [MIT License](LICENSE-MIT) or the
 [Apache License, Version 2.0](LICENSE-APACHE), at your option. The rest of
-the BlackCAD repository is proprietary; see its top-level `LICENSE`.
+the BlackCAD repository is under the same two licenses; see its top-level `LICENSE-MIT` and `LICENSE-APACHE`.
 
 The format knowledge comes from published specifications only (the Open
 Design Alliance's public DWG specification and Autodesk's DXF reference);

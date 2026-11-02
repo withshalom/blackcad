@@ -356,13 +356,15 @@ and `--example native_bench` for size and speed on 200,000 entities
 
 ## License
 
-BlackCAD is proprietary (see [`LICENSE`](LICENSE)), except the drawing
-database and the file formats: the crates [`cad-model`](crates/cad-model),
+BlackCAD is licensed under either of the [MIT License](LICENSE-MIT) or the
+[Apache License, Version 2.0](LICENSE-APACHE), at your option. Unless you
+say otherwise, a contribution you submit is licensed the same way. Code
+taken from other projects keeps its own notice: see [`NOTICE`](NOTICE).
+The drawing database and the file formats ([`cad-model`](crates/cad-model),
 [`cad-dwg`](crates/cad-dwg), [`cad-dxf`](crates/cad-dxf) and
-[`cad-native`](crates/cad-native) are licensed under either of the MIT
-License or the Apache License, Version 2.0, at your option. Other programs
-can use them to read and write DWG, DXF and `.blc` without the rest of
-BlackCAD.
+[`cad-native`](crates/cad-native)) are also published as crates of their
+own, so other programs can read and write DWG, DXF and `.blc` without the
+rest of BlackCAD.
 
 ## Working on it
 

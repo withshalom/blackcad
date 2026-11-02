@@ -25,8 +25,8 @@ Deliberate differences from DXF are listed in [§13](#13-differences-from-dxf).
 Nothing here is compatible with DXF or DWG readers; the aim is a format
 DXF and DWG map onto cleanly.
 
-The format is proprietary for now. Whether to publish this document is a
-separate decision. It is a draft until the DWG test corpus passes
+The format's reader and writer (`cad-native`) are MIT OR Apache-2.0. Whether
+to publish this document is a separate decision. It is a draft until the DWG test corpus passes
 (FORMAT-ROADMAP §4 item 10); until then it may still change.
 
 **Revisions.**

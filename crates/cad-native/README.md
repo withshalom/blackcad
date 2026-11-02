@@ -70,7 +70,7 @@ Rust standard library only, no `unsafe` code; depends on `cad-model` and
 
 Licensed under either of the [MIT License](LICENSE-MIT) or the
 [Apache License, Version 2.0](LICENSE-APACHE), at your option. The rest of
-the BlackCAD repository is proprietary; see its top-level `LICENSE`.
+the BlackCAD repository is under the same two licenses; see its top-level `LICENSE-MIT` and `LICENSE-APACHE`.
 
 The code was written from published specifications only; the clean-room
 record is in the repository's `docs/PROVENANCE.md`.
