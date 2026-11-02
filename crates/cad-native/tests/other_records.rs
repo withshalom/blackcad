@@ -1,4 +1,4 @@
-//! The container used from outside the crate, as CADCraft's `.cad` uses it:
+//! The container used from outside the crate, as CADCraft's `.cadcraft` uses it:
 //! its own records in named sections, the header saying whose they are.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -45,7 +45,7 @@ fn another_programs_records_round_trip_through_the_container() {
 #[test]
 fn blackcad_refuses_them_with_a_message() {
     let e = cad_native::read_bytes(&file(true, true)).unwrap_err().to_string();
-    assert!(e.contains("CADCraft drawing (.cad)"), "{e}");
+    assert!(e.contains("CADCraft drawing (.cadcraft)"), "{e}");
 }
 
 #[test]

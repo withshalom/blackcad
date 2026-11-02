@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- The native format's extension is `.cad` again (0.17.0 called it `.blc`).
+  CADCraft's native format is `.cadcraft`; it shares the container and
+  BlackCAD refuses it by name. The bytes and the format version (2.10) do
+  not change; `.blc` files still open, and the web app still lists `.blc` in
+  its pickers. BlackCAD's lock stays `.bcl`.
 - Licensing: the whole repository is MIT OR Apache-2.0 (`LICENSE-MIT`,
   `LICENSE-APACHE`), not only the four format crates. `LICENSE` (the
   proprietary notice) is removed and `NOTICE` names code taken from other

@@ -1,6 +1,6 @@
 # cad-native
 
-BlackCAD's native drawing format, `.blc`: the drawing as tagged records
+BlackCAD's native drawing format, `.cad`: the drawing as tagged records
 that use the public DXF group codes, inside a container modelled on DWG's:
 named sections, each compressed (DEFLATE) and checked (CRC-32), a section
 directory, an object map for reading one object without loading the rest,
@@ -15,7 +15,7 @@ adds:
 - **A schema** in each file describing every record, so older readers can
   skip what they don't know.
 - **Preserved DWG bytes** for objects the model doesn't decode yet, so a
-  DWG opened and saved as `.blc` loses nothing.
+  DWG opened and saved as `.cad` loses nothing.
 - **`.bcl` lock files** for drawings shared on a network folder.
 
 The drawing is [`cad-model`](../cad-model)'s database, the same one
@@ -23,8 +23,8 @@ The drawing is [`cad-model`](../cad-model)'s database, the same one
 
 ```rust,no_run
 let d = cad_dwg::read_bytes(&std::fs::read("part.dwg")?)?;
-cad_native::write_file(&d, "part.blc", &Default::default())?;
-let again = cad_native::read_file("part.blc")?;
+cad_native::write_file(&d, "part.cad", &Default::default())?;
+let again = cad_native::read_file("part.cad")?;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
@@ -35,7 +35,7 @@ one). The DEFLATE, zlib and SHA-256 code is public as
 `cad_native::codec`.
 
 The container and its tagged records are public too, for a program that
-keeps its own records in it, as CADCraft's `.cad` does: `container`
+keeps its own records in it, as CADCraft's `.cadcraft` does: `container`
 (`Builder::for_records` marks the file as holding someone else's records;
 `Container::parse`, `records_of`) and `tags` (`TagWriter`, `TagReader`,
 `put_record`, `records`). Compression, recovery data and the two header

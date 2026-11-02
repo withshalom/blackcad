@@ -34,9 +34,9 @@ USAGE:
     cad layers  <file>                      Layers: colour, linetype, lineweight, state
 
   Drawings and units:
-    cad new     <out.blc> [--imperial]      Start a drawing from the Metric (mm) or
+    cad new     <out.cad> [--imperial]      Start a drawing from the Metric (mm) or
                                             Imperial (in) template
-    cad sample  <out.blc>                   Save the sample plate drawing
+    cad sample  <out.cad>                   Save the sample plate drawing
     cad length  <text> [--unit U] [--format F] [--precision N]
                                             Read a typed length (10mm, 3/8\", 1'-2 1/2\")
                                             in a drawing of unit U (mm, in, ft, m …;
@@ -44,17 +44,17 @@ USAGE:
                                             (decimal, fractional, architectural,
                                             engineering, scientific)
 
-  Native format (.blc):
-    cad save    <file> <out.blc> [--no-preview] [--no-compress] [--no-recovery]
-                [--level fast|default|best] Save any drawing as native .blc
-    cad props   <file.blc> [--set NAME=VALUE]...
+  Native format (.cad):
+    cad save    <file> <out.cad> [--no-preview] [--no-compress] [--no-recovery]
+                [--level fast|default|best] Save any drawing as native .cad
+    cad props   <file.cad> [--set NAME=VALUE]...
                                             Show the drawing properties, or change
                                             them (title, subject, author, keywords,
                                             comments, last-saved-by, revision,
                                             hyperlink-base, or any custom name; an
                                             empty value removes a custom one),
                                             saved as a change set
-    cad part    <file.blc> [--block NAME] [--set NAME=VALUE]...
+    cad part    <file.cad> [--block NAME] [--set NAME=VALUE]...
                                             Show or set what a block (default: model
                                             space) is made of: material, grade,
                                             thickness (drawing units), quantity
@@ -62,20 +62,20 @@ USAGE:
                                             Length, contours, holes, net area and
                                             weight of the part (default layer
                                             VISIBLE)
-    cad verify  <file>                      Save to .blc in memory, read back, compare
-    cad compact <file.blc>                  Merge change sets into a fresh snapshot
-    cad inspect <file.blc> [--tags N]       Byte map and structure checks (audit);
+    cad verify  <file>                      Save to .cad in memory, read back, compare
+    cad compact <file.cad>                  Merge change sets into a fresh snapshot
+    cad inspect <file.cad> [--tags N]       Byte map and structure checks (audit);
                                             --tags N also prints the tags of the
                                             first N records of each section
-    cad preview <file.blc> <out.svg>        Extract the stored preview
-    cad schema  [file.blc]                  The record schema as a Markdown table:
+    cad preview <file.cad> <out.svg>        Extract the stored preview
+    cad schema  [file.cad]                  The record schema as a Markdown table:
                                             this build's, or the one a file carries
     cad presence <file>                     Who has the drawing open (.bcl lock)
 
     cad version                             Print version
     cad help                                This text
 
-<file> is a native .blc or a DWG file; the format is detected from its
+<file> is a native .cad or a DWG file; the format is detected from its
 contents. DWG: R13–R2000 (AC1012–AC1015) and R2004–R2018+ (AC1018, AC1024,
 AC1027, AC1032). AC1021 (2007–2009) is not read yet.";
 
@@ -370,7 +370,7 @@ fn run(cmd: &str, rest: &[String]) -> Result<(), String> {
             let path = a.value(0, "input file")?;
             let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
             if !native::is_native(&bytes) {
-                return Err("compact works on native .blc files".into());
+                return Err("compact works on native .cad files".into());
             }
             let generation = native::write_file(&open(path)?, path, &Default::default())
                 .map_err(|e| e.to_string())?;
@@ -458,7 +458,7 @@ fn run(cmd: &str, rest: &[String]) -> Result<(), String> {
         }
         "version" | "--version" | "-V" => {
             println!(
-                "{} {} (cad CLI {}; .blc format {}.{})",
+                "{} {} (cad CLI {}; .cad format {}.{})",
                 cad_core::PRODUCT_NAME,
                 cad_core::VERSION,
                 env!("CARGO_PKG_VERSION"),
@@ -486,7 +486,7 @@ fn info(d: &Drawing, path: &str) {
         .and_then(|b| native::inspect(&b).ok());
     if let Some(n) = &native_info {
         println!(
-            "Format:      native .blc {}.{}, generation {}, {} change sets, written by {}",
+            "Format:      native .cad {}.{}, generation {}, {} change sets, written by {}",
             n.format.0, n.format.1, n.generation, n.change_sets, n.writer
         );
         println!("Source:      {}", d.version);
@@ -716,7 +716,7 @@ fn part(path: &str, block: Option<&str>, sets: &[&str]) -> Result<(), String> {
         return Ok(());
     }
     if !native::is_native(&std::fs::read(path).map_err(|e| format!("{path}: {e}"))?) {
-        return Err("part data is saved into native .blc files; `cad save` one first".into());
+        return Err("part data is saved into native .cad files; `cad save` one first".into());
     }
     for s in sets {
         let (k, v) = s
@@ -1008,7 +1008,7 @@ fn header(d: &Drawing) {
 fn inspect(path: &str, tags: usize) -> Result<(), String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
     if !native::looks_native(&bytes) {
-        return Err(format!("{path} is not a native .blc file"));
+        return Err(format!("{path} is not a native .cad file"));
     }
     let rep = native::audit::audit(&bytes);
     println!("File        {path} ({} bytes)", rep.file_len);
@@ -1040,7 +1040,7 @@ fn inspect(path: &str, tags: usize) -> Result<(), String> {
     if t.tags > 0 {
         println!();
         println!(
-            "Object records: {} records, {} tags, {} bytes as .blc tags; the same tags as binary DXF: {} bytes ({:+.1}%)",
+            "Object records: {} records, {} tags, {} bytes as .cad tags; the same tags as binary DXF: {} bytes ({:+.1}%)",
             t.records,
             t.tags,
             t.cad_bytes,
@@ -1129,7 +1129,7 @@ fn verify(d: &Drawing, path: &str) -> Result<(), String> {
     }
     let preserved = d.objects.values().filter(|o| o.raw.is_some()).count();
     println!(
-        "{path}: {} objects ({preserved} kept as original DWG bytes), source {src} bytes → .blc {} bytes; write {write_ms:.1} ms, read {read_ms:.1} ms",
+        "{path}: {} objects ({preserved} kept as original DWG bytes), source {src} bytes → .cad {} bytes; write {write_ms:.1} ms, read {read_ms:.1} ms",
         d.objects.len(),
         bytes.len()
     );
