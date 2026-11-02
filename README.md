@@ -25,6 +25,26 @@ failed objects and matches entity for entity against AutoCAD's own DXFs,
 except 2007 (AC1021), whose container is not implemented yet.
 See [Status](#status).
 
+## Download
+
+The latest `main`, built by CI once every check has passed. The files sit
+on one
+[pre-release](https://github.com/withshalom/blackcad/releases/tag/main-latest)
+that each push to `main` replaces; the numbered releases are the `vX.Y.Z`
+tags.
+
+| For | Download |
+|---|---|
+| A browser, nothing to install | [**BlackCAD.html**](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD.html), the whole workbench in one file: double-click it. Or use the app at <https://cad.mosaiciron.com/> |
+| Hosting or installing the web app | [blackcad-web.zip](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-web.zip) |
+| Android | [CAD Viewer APK](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewer-android-debug.apk), a debug build: uninstall an earlier one first |
+| Command line (`cad`) | [Windows x64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-cli-windows-x86_64.zip) · [macOS, Apple silicon](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-cli-macos-arm64.tar.gz) · [Linux x86_64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-cli-linux-x86_64.tar.gz) |
+
+[`SHA256SUMS.txt`](https://github.com/withshalom/blackcad/releases/download/main-latest/SHA256SUMS.txt)
+lists the checksums. Nothing is code-signed yet, and there is no desktop
+app yet: on a computer, use the
+[web app](#the-workspace-in-a-browser-pwa) or `cad`.
+
 ## What's here
 
 ```
@@ -49,7 +69,8 @@ scripts/             build helpers for Linux and Windows
 tools/               compaction_lab.py: format-layout measurements; render_icons.py: the web app's PNG
                      icons (Python, not part of the build)
 .github/workflows/   CI: builds and tests on Linux, Windows and macOS, builds the Android APK and the web app,
-                     and publishes the web app from main (the gh-pages branch)
+                     and publishes from main: the web app (the gh-pages branch) and the downloads
+                     (the main-latest pre-release)
 ```
 
 ## Build
@@ -87,7 +108,8 @@ RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target x86_64-
 
 **Without installing anything:** push this folder to a GitHub repository.
 `.github/workflows/build.yml` lints, tests and builds on Linux, Windows
-and macOS on every push, and the binaries are downloadable from the run.
+and macOS on every push, and the binaries are downloadable from the run
+(from `main`, also under [Download](#download)).
 
 ## The workspace in a browser (PWA)
 

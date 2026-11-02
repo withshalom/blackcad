@@ -191,3 +191,52 @@ jobs:
         run: |
           bash .github/publish-pages.sh site 2>&1 | tee "$RUNNER_TEMP/step.log" \
             || { bash .github/annotate-failure.sh "Publish" "$RUNNER_TEMP/step.log"; exit 1; }
+
+  release:
+    # The downloads of the latest main, once every job has passed: the
+    # command-line builds, the Android APK, the web app and BlackCAD.html, as
+    # the files of one pre-release tagged main-latest, replaced on each push
+    # (package-release.sh names the files, publish-release.sh publishes them;
+    # README.md "Download" links to them). It is not "latest", so it never
+    # stands in for a numbered release: those are tags made by hand
+    # (CONTRIBUTING.md).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, msrv, android, web]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v8
+        with:
+          # Each artifact in a folder of its own name: the three command-line
+          # builds and the APK.
+          pattern: cad-*
+          path: artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          name: blackcad-web
+          path: artifacts/blackcad-web
+      - uses: actions/download-artifact@v8
+        with:
+          name: BlackCAD.html
+          path: artifacts/single-file
+      - name: Package
+        shell: bash
+        run: |
+          bash .github/package-release.sh artifacts release 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash .github/annotate-failure.sh "Package" "$RUNNER_TEMP/step.log"; exit 1; }
+      - name: Publish to the main-latest pre-release
+        shell: bash
+        run: |
+          sed -e "s/{sha}/$GITHUB_SHA/g" -e "s/{short}/${GITHUB_SHA::7}/g" \
+              -e "s|{repo}|$GITHUB_REPOSITORY|g" -e "s/{date}/$(date -u +%Y-%m-%d)/g" \
+              .github/release-notes.md >"$RUNNER_TEMP/notes.md"
+          bash .github/publish-release.sh release "$RUNNER_TEMP/notes.md" 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash .github/annotate-failure.sh "Publish release" "$RUNNER_TEMP/step.log"; exit 1; }
