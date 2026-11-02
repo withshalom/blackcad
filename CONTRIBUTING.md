@@ -64,6 +64,12 @@ the size of an allocation by themselves.
 
 ## Releases
 
+The `main-latest` pre-release is not one of these. CI's `release` job
+(`.github/workflows/build.yml`) replaces its files after every green push
+to `main`, so the README's Download links always have the newest build; it
+is never marked "latest" and has no version. A numbered release is made by
+hand, as below.
+
 1. Set the version in `Cargo.toml` (`[workspace.package]`). Until 1.0, a
    change that breaks the API or a file format takes the next minor
    version.
