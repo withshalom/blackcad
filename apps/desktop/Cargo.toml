@@ -1,0 +1,17 @@
+[package]
+name = "blackcad-desktop"
+description = "BlackCAD for Windows, Linux and macOS: the web workbench in its own window, served from inside one program"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+# No third-party crates, like the rest of the workspace. The program serves
+# the browser workbench (dist/web, built by `cargo xtask web`, embedded at
+# build time) on 127.0.0.1 and opens it in an app window of the Chromium
+# based browser on the computer (Chrome, Edge, Brave, Chromium).
+[[bin]]
+name = "blackcad"
+path = "src/main.rs"
