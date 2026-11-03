@@ -45,7 +45,7 @@ tags.
 
 | For | Download |
 |---|---|
-| Windows, macOS, Linux | The desktop viewport: [Windows x64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-windows-x86_64.zip) · [macOS, Apple silicon](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-macos-arm64.tar.gz) · [Linux x86_64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-linux-x86_64.tar.gz). Unpack it and run `blackcad`, or `blackcad drawing.dwg`. It opens DWG, DXF and `.cad` and views, pans, zooms and snaps; it does not edit yet |
+| Windows, macOS, Linux | The desktop app: [Windows x64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-windows-x86_64.zip) · [macOS, Apple silicon](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-macos-arm64.tar.gz) · [Linux x86_64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-linux-x86_64.tar.gz). Unpack it and run `blackcad`, or `blackcad drawing.dwg`. Menus, toolbar, command line and layers panel; opens and saves DWG, DXF and `.cad`; draws lines, circles, rectangles, polylines and arcs by clicking or typing; selects, erases, undoes, snaps. Type `help` for the commands |
 | A browser, nothing to install | [**BlackCAD.html**](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD.html), the whole workbench in one file: double-click it. Or use the app at <https://cad.mosaiciron.com/> |
 | Hosting or installing the web app | [blackcad-web.zip](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-web.zip) |
 | Android | [CAD Viewer APK](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewer-android-debug.apk), a debug build: uninstall an earlier one first |
@@ -53,7 +53,7 @@ tags.
 
 [`SHA256SUMS.txt`](https://github.com/withshalom/blackcad/releases/download/main-latest/SHA256SUMS.txt)
 lists the checksums. Nothing is code-signed yet, so Windows SmartScreen and
-macOS Gatekeeper warn about the desktop viewport: allow it once (on macOS,
+macOS Gatekeeper warn about the desktop app: allow it once (on macOS,
 right-click it and choose Open). To draw and edit on a computer, use the
 [web app](#the-workspace-in-a-browser-pwa).
 
@@ -72,7 +72,7 @@ crates/cad-ffi/      bridge to the platform apps: the session (open drawings, un
 apps/web/            the BlackCAD workbench as a browser app (PWA), installable on desktop and Android;
                      published at https://cad.mosaiciron.com/ (apps/web/README.md)
 apps/cad-cli/        `cad`, a command-line test build
-apps/viewport/       the desktop viewport (egui): opens DWG, DXF and .cad, pans, zooms, snaps;
+apps/viewport/       the desktop app (egui): menus, toolbar, command line, layers; opens, draws, edits and saves;
                      its own workspace, built by the `viewport` workflow
 apps/android/        CAD Viewer, an Android test app (Java, Android's own APIs only)
 xtask/               `cargo xtask web`/`serve`: builds and serves the browser app;
@@ -385,7 +385,7 @@ and `--example native_bench` for size and speed on 200,000 entities
   and table/leader styles from the model. Password-protected drawings and
   signatures (the format reserves the flags). Paper-space drafting.
 - Apps: the Android viewer only views; saving from it needs the storage
-  design in `docs/ARCHITECTURE.md`. The desktop viewport (`apps/viewport`) views only; no iOS app yet.
+  design in `docs/ARCHITECTURE.md`. The desktop app (`apps/viewport`) draws and edits the basics (the web app has more); no iOS app yet.
 - Unmodelled fields of decoded DWG objects are not kept in `.cad` yet.
   Hatch patterns (outlines only), TrueType fonts, angular and ordinate
   dimensions without a block, dimension styles from DWG.
