@@ -164,7 +164,7 @@ jobs:
     # which GitHub Pages serves (Settings → Pages → Build and deployment:
     # Deploy from a branch, gh-pages, / (root)).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, msrv, android, web]
+    needs: [build, msrv, android, web, viewport]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -176,6 +176,11 @@ jobs:
       PAGES_DOMAIN: ${{ github.repository == 'withshalom/CAD' && 'cad.mosaiciron.com' || '' }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v8
+        with:
+          # The desktop viewport for each system.
+          pattern: blackcad-viewport-*
+          path: artifacts
       - uses: actions/download-artifact@v8
         with:
           name: blackcad-web
@@ -192,16 +197,62 @@ jobs:
           bash .github/publish-pages.sh site 2>&1 | tee "$RUNNER_TEMP/step.log" \
             || { bash .github/annotate-failure.sh "Publish" "$RUNNER_TEMP/step.log"; exit 1; }
 
+  viewport:
+    # The desktop viewport (apps/viewport). It is the one part of the
+    # repository with third-party crates (egui, eframe), so it is its own
+    # workspace with its own Cargo.lock, built here and kept out of the
+    # dependency-free jobs above.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: blackcad-viewport-linux-x86_64
+            bin: apps/viewport/target/release/blackcad
+          - os: windows-latest
+            artifact: blackcad-viewport-windows-x86_64
+            bin: apps/viewport/target/release/blackcad.exe
+          - os: macos-latest
+            artifact: blackcad-viewport-macos-arm64
+            bin: apps/viewport/target/release/blackcad
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/viewport
+    steps:
+      - uses: actions/checkout@v5
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libwayland-dev \
+            libx11-dev libxcb1-dev libxcursor-dev libxrandr-dev libxi-dev libfontconfig1-dev libfreetype-dev
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+      - name: Lint
+        run: cargo clippy --locked -- -D warnings
+      - name: Build
+        run: cargo build --release --locked
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.bin }}
+
   release:
     # The downloads of the latest main, once every job has passed: the
-    # command-line builds, the Android APK, the web app and BlackCAD.html, as
+    # command-line builds, the desktop viewport, the Android APK, the web app and
+    # BlackCAD.html, as
     # the files of one pre-release tagged main-latest, replaced on each push
     # (package-release.sh names the files, publish-release.sh publishes them;
     # README.md "Download" links to them). It is not "latest", so it never
     # stands in for a numbered release: those are tags made by hand
     # (CONTRIBUTING.md).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, msrv, android, web]
+    needs: [build, msrv, android, web, viewport]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
