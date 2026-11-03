@@ -51,6 +51,11 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
+      - name: Print lock
+        if: runner.os == 'Linux'
+        run: |
+          cargo generate-lockfile
+          echo "LOCKBEGIN"; cat Cargo.lock; echo "LOCKEND"
       - name: Lint
         run: cargo clippy -- -D warnings
       - name: Build
