@@ -469,7 +469,7 @@ the editor.
    browser workbench (`apps/web`, above). The desktop viewport has begun:
    `crates/cad-view` (toolkit-free: view, grid, shapes, snap and pick
    replies, the `Viewer`) under `apps/viewport` (egui; opens, pans, zooms,
-   snaps; no editing yet). Android has a test viewer
+   snaps; draws and edits the basics through the session's commands). Android has a test viewer
    (`apps/android`); its editor waits on the storage decision above. Then
    iOS.
 9. Live collaboration: exchange change sets between sessions.

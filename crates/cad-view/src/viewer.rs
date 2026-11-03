@@ -6,9 +6,11 @@
 
 use crate::display::{Bounds, Display};
 use crate::draw::{DrawOptions, Prim, tessellate, tessellate_item};
+use crate::editor::LayerInfo;
 use crate::grid::{GRID_SPACING, Grid, grid};
 use crate::json::Json;
 use crate::query::{SnapHit, parse_pick, parse_snaps, pick_command, snap_command};
+use crate::tool::Tool;
 use crate::view::{View, wheel_factor};
 use cad_ffi::session::Session;
 
@@ -39,8 +41,8 @@ pub struct LayerEntry {
 }
 
 pub struct Viewer {
-    session: Session,
-    id: Option<u32>,
+    pub(crate) session: Session,
+    pub(crate) id: Option<u32>,
     pub name: String,
     pub display: Display,
     pub view: View,
@@ -52,6 +54,23 @@ pub struct Viewer {
     pub units: String,
     /// The last thing that went wrong or worth saying, for the status bar.
     pub message: String,
+    /// The drawing tool in use, and the points it has so far (world).
+    pub tool: Tool,
+    pub points: Vec<[f64; 2]>,
+    /// Snap to the points the core finds near the pointer.
+    pub snap_on: bool,
+    /// The objects selected.
+    pub selected: Vec<u64>,
+    /// What the core says about the one selected object (`get`).
+    pub selection_text: String,
+    /// The command line's history: what was typed and what came of it.
+    pub log: Vec<String>,
+    /// Edits since the last save, and the steps of undo and redo there are.
+    pub dirty: bool,
+    pub undo_depth: usize,
+    pub redo_depth: usize,
+    /// The drawing's layers, as the core lists them.
+    pub layer_infos: Vec<LayerInfo>,
 }
 
 impl Default for Viewer {
@@ -79,6 +98,16 @@ impl Viewer {
             hover: None,
             units: String::new(),
             message: String::new(),
+            tool: Tool::Select,
+            points: Vec::new(),
+            snap_on: true,
+            selected: Vec::new(),
+            selection_text: String::new(),
+            log: Vec::new(),
+            dirty: false,
+            undo_depth: 0,
+            redo_depth: 0,
+            layer_infos: Vec::new(),
         }
     }
 
@@ -99,7 +128,7 @@ impl Viewer {
         self.adopt(id, "sample plate")
     }
 
-    fn adopt(&mut self, id: u32, name: &str) -> Result<(), String> {
+    pub(crate) fn adopt(&mut self, id: u32, name: &str) -> Result<(), String> {
         let shown = self
             .session
             .display(id)
@@ -112,6 +141,11 @@ impl Viewer {
         self.display = shown;
         self.hover = None;
         self.units = self.read_units(id);
+        self.tool = Tool::Select;
+        self.points.clear();
+        self.selected.clear();
+        self.selection_text.clear();
+        self.refresh_info();
         self.options.hidden_layers.clear();
         self.zoom_extents();
         self.message = format!("{name}: {} objects", self.display.items.len());
@@ -188,12 +222,15 @@ impl Viewer {
         };
         let world = self.view.to_world(at);
         let aperture = APERTURE_POINTS / self.view.scale;
-        let snap = self
-            .session
-            .exec(id, &snap_command(world, aperture, self.snap_kinds))
-            .ok()
-            .and_then(|r| parse_snaps(&r).ok())
-            .and_then(|s| s.into_iter().next());
+        let snap = if self.snap_on {
+            self.session
+                .exec(id, &snap_command(world, aperture, self.snap_kinds))
+                .ok()
+                .and_then(|r| parse_snaps(&r).ok())
+                .and_then(|s| s.into_iter().next())
+        } else {
+            None
+        };
         let handle = match &snap {
             Some(s) if s.handle != 0 => Some(s.handle),
             _ => self

@@ -1,7 +1,11 @@
 # Changelog
 
 ## Unreleased
-- The desktop viewport, and downloads of `main`. `crates/cad-view` (standard library only, in the
+- The desktop app (`apps/viewport`), and downloads of `main`. Menu bar,
+  toolbar, command line, layers panel; draws lines, circles, rectangles,
+  polylines and arcs by clicking or typing points; selects, erases, undo and
+  redo; opens and saves DWG, DXF and `.cad`. The first build (the
+  `main-latest` viewport) was only a canvas. `crates/cad-view` (standard library only, in the
   dependency-free workspace) holds everything a viewer decides: the display
   list decoded, the view (pan, zoom about the pointer, zoom to extents), the
   grid, shapes clipped and flattened for the screen, the session's snap and

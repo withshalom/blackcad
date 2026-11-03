@@ -21,7 +21,8 @@ Only CADCraft's canvas and application shell were read. Its DWG and DXF code
 
 Third-party crates in apps/viewport
 -----------------------------------
-egui and eframe (https://github.com/emilk/egui), MIT OR Apache-2.0, and the
-crates they depend on, as resolved in apps/viewport/Cargo.lock. They are
+egui and eframe (https://github.com/emilk/egui), MIT OR Apache-2.0, rfd, the
+file dialogs (https://github.com/PolyMeilex/rfd), MIT, and the crates they
+depend on, as resolved in apps/viewport/Cargo.lock. They are
 linked into the desktop viewport only; nothing else in the repository
 depends on them.
