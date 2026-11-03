@@ -7,9 +7,13 @@ members = [
     "crates/cad-dxf",
     "crates/cad-core",
     "crates/cad-ffi",
+    "crates/cad-view",
     "apps/cad-cli",
     "xtask",
 ]
+# The egui viewport has third-party dependencies and is built apart (its own
+# workspace and lock file), so this one stays dependency-free.
+exclude = ["apps/viewport"]
 
 [workspace.package]
 version = "0.17.0"

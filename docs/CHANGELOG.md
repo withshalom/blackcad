@@ -1,6 +1,15 @@
 # Changelog
 
 ## Unreleased
+- The desktop viewport. `crates/cad-view` (standard library only, in the
+  dependency-free workspace) holds everything a viewer decides: the display
+  list decoded, the view (pan, zoom about the pointer, zoom to extents), the
+  grid, shapes clipped and flattened for the screen, the session's snap and
+  pick replies, and a `Viewer` that ties them to a session. `apps/viewport`
+  is the egui window that paints it (its own workspace; the one place with
+  third-party crates, see PROVENANCE.md), built by the new `viewport`
+  workflow. The design and algorithms follow CADCraft's egui canvas
+  (NOTICE).
 - The native format's extension is `.cad` again (0.17.0 called it `.blc`).
   CADCraft's native format is `.cadcraft`; it shares the container and
   BlackCAD refuses it by name. The bytes and the format version (2.10) do

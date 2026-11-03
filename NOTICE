@@ -5,6 +5,23 @@ Version 2.0 (LICENSE-APACHE), at your option.
 
 Code from other projects
 ------------------------
-None yet. Code taken from another project (for example the GPU viewport of
-CADCraft, MIT OR Apache-2.0) is listed here with its source repository,
+Code taken from another project is listed here with its source repository,
 revision, files, author and license, and keeps its own notice in the file.
+
+CADCraft (https://github.com/storytold/cadcraft, revision 2ac500925b6b),
+Copyright (c) the ArtCraft Team and CADCraft contributors, MIT OR Apache-2.0.
+The egui viewport's design and algorithms: the view transform and zoom about
+the pointer, the adaptive grid and its line-count guard, segment clipping
+and the way the canvas paints shapes with egui. They are re-written here
+for BlackCAD's display list and live in:
+  crates/cad-view/src/view.rs, grid.rs, draw.rs (std-only logic)
+  apps/viewport/src/main.rs, paint.rs (the egui and eframe layer)
+Only CADCraft's canvas and application shell were read. Its DWG and DXF code
+(crates/dwg, the acadrust crate) was not read; see docs/PROVENANCE.md.
+
+Third-party crates in apps/viewport
+-----------------------------------
+egui and eframe (https://github.com/emilk/egui), MIT OR Apache-2.0, and the
+crates they depend on, as resolved in apps/viewport/Cargo.lock. They are
+linked into the desktop viewport only; nothing else in the repository
+depends on them.

@@ -7,9 +7,18 @@ before commercial release.
 
 ## Rules this project follows
 
-1. **No third-party code.** No crates, no vendored sources, no copied
-   snippets. `Cargo.toml` files declare no dependencies; `cargo tree` shows
-   only this workspace. The Android app uses only Android's own platform
+1. **No third-party code, with one named exception.** No crates, no
+   vendored sources, no copied snippets. The `Cargo.toml` files of the
+   workspace declare no dependencies; `cargo tree` shows only this
+   workspace. The exception is the desktop viewport, `apps/viewport`: a
+   separate workspace, excluded from the root one, that uses egui and
+   eframe (MIT OR Apache-2.0) to put `crates/cad-view`'s shapes in a
+   window. Everything it decides lives in `crates/cad-view`, which is
+   standard library only and is part of the dependency-free workspace; the
+   app is a thin layer that paints and reads the mouse, so it can be
+   replaced by another toolkit without touching the core. Its crates are
+   listed in `NOTICE`. A drawing is parsed by BlackCAD's own readers before
+   the toolkit sees it. The Android app uses only Android's own platform
    APIs (no AndroidX, Kotlin or other libraries), and CI fails the build if
    its APK contains any class from outside the app. Build tools (Gradle,
    the Android Gradle plugin, the Android SDK and NDK) build it but are not
@@ -19,14 +28,20 @@ before commercial release.
    WebAssembly module imports nothing.
 2. **Format knowledge comes from published specifications**, not from other
    implementations.
-3. **Not consulted, at any point:** LibreDWG, libdxfrw, ACadSharp, acadrust
+3. **Code from CADCraft's egui canvas** (MIT OR Apache-2.0, storytold/cadcraft, the
+   upstream of the owner's CADCraft fork) is used with attribution in `NOTICE`:
+   the view transform, grid and drawing approach of its canvas, for
+   `crates/cad-view` and `apps/viewport`. Its DWG and DXF code (the
+   `crates/dwg` directory and the acadrust crate) was **not** read, and the
+   rule below stands.
+4. **Not consulted, at any point:** LibreDWG, libdxfrw, ACadSharp, acadrust
    (see "Third-party code considered and rejected"), the ODA
    Drawings SDK or its headers, Teigha, ezdxf, and the DWG import code in
    the separate KAD project (which uses LibreDWG). For completeness: in the
    same working session, before this project started, the AI read KAD's
    planning notes about integrating LibreDWG. Those notes cover library
    choice, licensing and API names, not the DWG file format.
-4. Every module names the specification sections it implements and whether
+5. Every module names the specification sections it implements and whether
    the code was checked against the specification text.
 
 ## Licensing

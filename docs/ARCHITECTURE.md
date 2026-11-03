@@ -31,7 +31,9 @@ name the format and its code, not the product.
   the core cannot decode yet keep their original DWG bytes.
 - **One core, every platform.** The core is a plain Rust library using only
   the standard library: no crates, no `unsafe`, no platform code. Each app
-  (desktop, Android, iOS) is a thin shell around it. The one piece that
+  (desktop, Android, iOS) is a thin shell around it; the desktop's
+  toolkit-free half is `crates/cad-view`, and only its window
+  (`apps/viewport`, egui) has third-party crates. The one piece that
   needs `unsafe`, the bridge to the apps (`crates/cad-ffi`), is small and
   separate.
 - **Open formats, open to others.** The drawing database and the DWG,
@@ -464,7 +466,10 @@ the editor.
    2026-10-08 advisory, P3-2, asked that they stay on this list).
 7. DWG export (writer), then round-trip tests DWG → `.cad` → DWG.
 8. Desktop app shell with `.bcl` presence. The GUI is built first as the
-   browser workbench (`apps/web`, above). Android has a test viewer
+   browser workbench (`apps/web`, above). The desktop viewport has begun:
+   `crates/cad-view` (toolkit-free: view, grid, shapes, snap and pick
+   replies, the `Viewer`) under `apps/viewport` (egui; opens, pans, zooms,
+   snaps; no editing yet). Android has a test viewer
    (`apps/android`); its editor waits on the storage decision above. Then
    iOS.
 9. Live collaboration: exchange change sets between sessions.
