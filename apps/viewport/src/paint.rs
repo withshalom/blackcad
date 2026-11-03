@@ -144,7 +144,7 @@ fn paint_prim(painter: &egui::Painter, prim: &Prim, at: &impl Fn([f32; 2]) -> Po
         }
         Shape::Fill { triangles } => {
             let mut mesh = Mesh::default();
-            for tri in triangles.chunks_exact(3) {
+            for tri in triangles.as_chunks::<3>().0 {
                 let i = mesh.vertices.len() as u32;
                 for p in tri {
                     mesh.colored_vertex(at(*p), col);
