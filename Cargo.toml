@@ -7,6 +7,7 @@ members = [
     "crates/cad-dxf",
     "crates/cad-core",
     "crates/cad-ffi",
+    "crates/cad-view",
     "apps/cad-cli",
     "xtask",
 ]
