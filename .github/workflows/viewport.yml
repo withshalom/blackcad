@@ -51,23 +51,11 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
-      - name: Print lock
-        if: runner.os == 'Linux'
-        run: |
-          cargo generate-lockfile
-          echo "LOCKBEGIN"; cat Cargo.lock; echo "LOCKEND"
       - name: Lint
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --locked -- -D warnings
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --locked
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.bin }}
-      # The lock file is not in the repository yet; the first green run
-      # leaves the one it resolved here, to be committed.
-      - uses: actions/upload-artifact@v6
-        if: runner.os == 'Linux'
-        with:
-          name: viewport-cargo-lock
-          path: apps/viewport/Cargo.lock
