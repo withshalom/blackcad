@@ -5,6 +5,8 @@
 # OUT_DIR, with a SHA256SUMS.txt over them. ARTIFACTS_DIR holds the run's
 # artifacts, each in a folder of its own name (what download-artifact makes):
 #   cad-linux-x86_64/cad  cad-macos-arm64/cad  cad-windows-x86_64/cad.exe
+#   blackcad-viewport-linux-x86_64/blackcad  blackcad-viewport-macos-arm64/blackcad
+#   blackcad-viewport-windows-x86_64/blackcad.exe
 #   cad-viewer-debug-apk/app-debug.apk
 #   blackcad-web/ (the web app: index.html, core.wasm, ...)
 #   single-file/BlackCAD.html
@@ -40,6 +42,16 @@ for target in linux-x86_64 macos-arm64; do
 done
 exe=$(pick cad-windows-x86_64 cad.exe)
 (cd "$(dirname "$exe")" && zip -q "$out/blackcad-cli-windows-x86_64.zip" cad.exe)
+
+# The desktop viewport, packed the same way.
+for target in linux-x86_64 macos-arm64; do
+  bin=$(pick "blackcad-viewport-$target" blackcad)
+  mkdir "$stage/viewport-$target"
+  install -m 0755 "$bin" "$stage/viewport-$target/blackcad"
+  tar -czf "$out/blackcad-viewport-$target.tar.gz" -C "$stage/viewport-$target" blackcad
+done
+exe=$(pick blackcad-viewport-windows-x86_64 blackcad.exe)
+(cd "$(dirname "$exe")" && zip -q "$out/blackcad-viewport-windows-x86_64.zip" blackcad.exe)
 
 apk=$(pick cad-viewer-debug-apk app-debug.apk)
 cp "$apk" "$out/blackcad-viewer-android-debug.apk"
