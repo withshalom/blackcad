@@ -38,15 +38,19 @@
 
 pub mod display;
 pub mod draw;
+pub mod editor;
 pub mod grid;
 pub mod json;
 pub mod query;
+pub mod tool;
 pub mod view;
 pub mod viewer;
 
 pub use display::{Bounds, Display, Item, Op, Rgb, Style};
 pub use draw::{DrawOptions, Prim, Shape, tessellate, tessellate_item};
+pub use editor::LayerInfo;
 pub use grid::{Grid, GridLine, grid};
 pub use query::{SnapHit, parse_pick, parse_snaps, pick_command, snap_command};
+pub use tool::Tool;
 pub use view::{View, wheel_factor};
 pub use viewer::{Hover, LayerEntry, Viewer};
