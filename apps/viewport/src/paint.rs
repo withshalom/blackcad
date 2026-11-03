@@ -59,7 +59,7 @@ const SNAP_KINDS: [(u32, &str); 8] = [
 ];
 
 fn cmd_id() -> egui::Id {
-    egui::Id::new("blackcad_command_line")
+    egui::Id::unique("blackcad_command_line")
 }
 
 pub fn show(viewer: &mut Viewer, st: &mut State, ui: &mut egui::Ui) -> Vec<Action> {
