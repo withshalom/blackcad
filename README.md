@@ -34,11 +34,14 @@ crates/cad-dxf/      the DXF reader and writer                                (M
 crates/cad-native/   the native .cad format, and its DEFLATE and SHA-256 code (MIT OR Apache-2.0)
 crates/cad-core/     the core library on those four: drafting standards, editing commands,
                      units, font, rendering, raster and vector output
+crates/cad-view/     the viewport's logic with no GUI toolkit: view, grid, screen shapes, snap replies
 crates/cad-ffi/      bridge to the platform apps: the session (open drawings, undo, commands),
                      WebAssembly entry points for the browser, JNI entry points for Android
 apps/web/            the BlackCAD workbench as a browser app (PWA), installable on desktop and Android;
                      published at https://cad.mosaiciron.com/ (apps/web/README.md)
 apps/cad-cli/        `cad`, a command-line test build
+apps/viewport/       the desktop viewport (egui): opens DWG, DXF and .cad, pans, zooms, snaps;
+                     its own workspace, built by the `viewport` workflow
 apps/android/        CAD Viewer, an Android test app (Java, Android's own APIs only)
 xtask/               `cargo xtask web`/`serve`: builds and serves the browser app;
                      `cargo xtask android`: builds the core for the Android app

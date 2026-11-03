@@ -1,0 +1,22 @@
+[package]
+name = "blackcad-viewport"
+description = "BlackCAD's desktop viewport: an egui window over the cad-view logic"
+version = "0.17.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[[bin]]
+name = "blackcad"
+path = "src/main.rs"
+
+# This app is the one place in the repository that uses third-party crates
+# (egui and eframe, MIT OR Apache-2.0), so it is its own workspace, outside
+# the dependency-free one at the repository root. See docs/PROVENANCE.md.
+[workspace]
+
+[dependencies]
+cad-view = { path = "../../crates/cad-view" }
+egui = { version = "0.37", default-features = false, features = ["default_fonts"] }
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }

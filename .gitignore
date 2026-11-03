@@ -8,3 +8,4 @@
 *.dxf
 !/corpus/**/*.dxf
 !/apps/web/**/*.svg
+/apps/viewport/target
