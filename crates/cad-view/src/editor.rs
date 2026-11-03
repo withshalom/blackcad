@@ -340,12 +340,13 @@ impl Viewer {
                 self.point(self.tool, p);
                 return;
             }
-            if self.tool == Tool::Circle
-                && let [c] = self.points.as_slice()
-                && let [r] = words.as_slice()
-                && let Ok(r) = r.parse::<f64>()
-                && let Some(cmd) = tool::circle(*c, r)
-            {
+            // Written without `let` chains: they need Rust 1.88 and the
+            // workspace builds with 1.87.
+            let circle = match (self.tool, self.points.as_slice(), words.as_slice()) {
+                (Tool::Circle, [c], [r]) => r.parse::<f64>().ok().and_then(|r| tool::circle(*c, r)),
+                _ => None,
+            };
+            if let Some(cmd) = circle {
                 self.points.clear();
                 self.log.push(format!("> {line}"));
                 self.run_command(&cmd);
