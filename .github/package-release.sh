@@ -6,6 +6,7 @@
 # artifacts, each in a folder of its own name (what download-artifact makes):
 #   cad-linux-x86_64/cad  cad-macos-arm64/cad  cad-windows-x86_64/cad.exe
 #   cad-viewer-debug-apk/app-debug.apk
+#   cad-viewer-release-apk/app-release.apk (only when the run could sign)
 #   blackcad-web/ (the web app: index.html, core.wasm, ...)
 #   single-file/BlackCAD.html
 # Fails, naming the file, when any of them is missing. The names are the
@@ -43,6 +44,11 @@ exe=$(pick cad-windows-x86_64 cad.exe)
 
 apk=$(pick cad-viewer-debug-apk app-debug.apk)
 cp "$apk" "$out/blackcad-viewer-android-debug.apk"
+# The signed release APK, when the run had the signing secrets. It is the
+# one to install; the debug APK is always offered as well.
+if [ -d "$in/cad-viewer-release-apk" ]; then
+  cp "$(pick cad-viewer-release-apk app-release.apk)" "$out/blackcad-viewer-android.apk"
+fi
 page=$(pick single-file BlackCAD.html)
 cp "$page" "$out/BlackCAD.html"
 
