@@ -69,9 +69,10 @@ This is a test build. For people outside testing:
 
 - **Application ID.** `com.withshalom.cad` is a placeholder until the
   product has a name, and it cannot change once published on Google Play.
-- **Signing.** Create a release keystore (`keytool`), sign release builds
-  with it, and back it up. An update signed with a different key cannot
-  replace the installed app.
+- **Signing.** CI signs a release APK when the repository has the four
+  secrets below; without them it publishes only the debug APK. An update
+  signed with a different key cannot replace the installed app, so keep the
+  keystore and its passwords backed up somewhere other than GitHub.
 - **Google Play.** Upload an Android App Bundle
   (`gradle -p apps/android bundleRelease`), not an APK, with target SDK 36
   or later. The native libraries must be aligned for 16 KB memory pages;
@@ -79,3 +80,29 @@ This is a test build. For people outside testing:
 - **Saving.** Editing needs a decision on storage, because the Android file
   picker gives the app a content link to one file, not a path to the folder
   (see `docs/ARCHITECTURE.md`).
+
+## Signing a release APK for sideloading
+
+Once, on your own machine (needs a JDK):
+
+```
+keytool -genkeypair -v -keystore upload.jks -alias blackcad \
+  -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 upload.jks        # macOS: base64 -i upload.jks
+```
+
+Then, under Settings > Secrets and variables > Actions, add:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the base64 text of `upload.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | `blackcad` (the alias above) |
+| `ANDROID_KEY_PASSWORD` | the key password |
+
+The next push to `main` builds `app-release.apk`, checks it with `apksigner`
+and `check-apk.sh`, and the `main-latest` release offers it as
+`blackcad-viewer-android.apk` next to the debug APK. The version code is the
+CI run number, so each build can update the one before it. To build one
+yourself, set `ANDROID_KEYSTORE_FILE` (a path) and the three other
+variables, then `gradle -p apps/android assembleRelease`.

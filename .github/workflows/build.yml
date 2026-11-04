@@ -114,6 +114,42 @@ jobs:
         run: |
           bash .github/check-apk.sh "$APK" 2>&1 | tee "$RUNNER_TEMP/step.log" \
             || { bash .github/annotate-failure.sh "Check the APK" "$RUNNER_TEMP/step.log"; exit 1; }
+      - name: Signed release APK
+        # Only when the upload keystore is in the repository's secrets
+        # (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+        # ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD; see apps/android/README.md).
+        # Pull requests from forks and repositories without them skip it, and
+        # the release then offers the debug APK only.
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "No signing keystore in the secrets: skipping the release APK."
+            exit 0
+          fi
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/upload.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$ANDROID_KEYSTORE_FILE"
+          {
+            gradle --no-daemon -p apps/android assembleRelease
+            bt="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+            rel=apps/android/app/build/outputs/apk/release/app-release.apk
+            "$bt/apksigner" verify --verbose --print-certs "$rel"
+            bash .github/check-apk.sh "$rel"
+            mkdir -p dist-apk && cp "$rel" dist-apk/app-release.apk
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+          } 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash .github/annotate-failure.sh "Signed release APK" "$RUNNER_TEMP/step.log"; exit 1; }
+          rm -f "$ANDROID_KEYSTORE_FILE"
+      - uses: actions/upload-artifact@v6
+        if: env.SIGNED == '1'
+        with:
+          name: cad-viewer-release-apk
+          path: dist-apk/app-release.apk
 
   web:
     # The browser workbench (apps/web): the core built for WebAssembly, the

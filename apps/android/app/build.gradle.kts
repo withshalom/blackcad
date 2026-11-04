@@ -18,8 +18,31 @@ android {
         // (`cargo xtask android --api`, default 26).
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        // CI sets ANDROID_VERSION_CODE (the run number) so each build can
+        // update the one before it; a local build is 1.
+        versionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInt()
         versionName = "0.1.0"
+    }
+
+    // The release APK is signed only when CI (or you) provides a keystore:
+    // ANDROID_KEYSTORE_FILE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
+    // ANDROID_KEY_PASSWORD. Without them assembleRelease makes an unsigned APK
+    // and nothing here fails.
+    val keystore = System.getenv("ANDROID_KEYSTORE_FILE")
+    if (!keystore.isNullOrEmpty()) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     compileOptions {
