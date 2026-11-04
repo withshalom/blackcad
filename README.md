@@ -1,14 +1,11 @@
 # BlackCAD — clean-room CAD software with its own `.cad` format and DWG fluency (draft)
 
 <p align="center">
-  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-windows-x86_64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-Download-0078D6?style=for-the-badge&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0zIDNoOC41djguNUgzek0xMi41IDNIMjF2OC41aC04LjV6TTMgMTIuNWg4LjVWMjFIM3pNMTIuNSAxMi41SDIxVjIxaC04LjV6Ii8%2BPC9zdmc%2B&logoColor=white"></a>
-  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-macos-arm64.tar.gz"><img alt="Download for macOS (Apple silicon)" src="https://img.shields.io/badge/macOS-Download-333333?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-linux-x86_64.tar.gz"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-Download-E95420?style=for-the-badge&logo=linux&logoColor=white"></a>
   <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewer-android-debug.apk"><img alt="Download for Android" src="https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white"></a>
   <a href="https://cad.mosaiciron.com/"><img alt="Use it in your browser" src="https://img.shields.io/badge/Web-Use_in_browser-0e3463?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
 </p>
 
-<p align="center"><sub>The desktop downloads are the latest <code>main</code>, built by CI; <a href="#download">more builds below</a>.</sub></p>
+<p align="center"><sub>The downloads are the latest <code>main</code>, built by CI; <a href="#download">more builds below</a>.</sub></p>
 
 *The program's name lives in this title, in one constant in the core
 (`cad_core::PRODUCT_NAME`, the name it writes into DWG files as the program
@@ -45,7 +42,7 @@ tags.
 
 | For | Download |
 |---|---|
-| Windows, macOS, Linux | The desktop app: [Windows x64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-windows-x86_64.zip) · [macOS, Apple silicon](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-macos-arm64.tar.gz) · [Linux x86_64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewport-linux-x86_64.tar.gz). Unpack it and run `blackcad`, or `blackcad drawing.dwg`. Menus, toolbar, command line and layers panel; opens and saves DWG, DXF and `.cad`; draws lines, circles, rectangles, polylines and arcs by clicking or typing; selects, erases, undoes, snaps. Type `help` for the commands |
+| Windows, macOS, Linux | Use the web app, or install it from the browser (see below). Desktop apps that wrap it are planned. |
 | A browser, nothing to install | [**BlackCAD.html**](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD.html), the whole workbench in one file: double-click it. Or use the app at <https://cad.mosaiciron.com/> |
 | Hosting or installing the web app | [blackcad-web.zip](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-web.zip) |
 | Android | [CAD Viewer APK](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewer-android-debug.apk), a debug build: uninstall an earlier one first |
@@ -53,7 +50,7 @@ tags.
 
 [`SHA256SUMS.txt`](https://github.com/withshalom/blackcad/releases/download/main-latest/SHA256SUMS.txt)
 lists the checksums. Nothing is code-signed yet, so Windows SmartScreen and
-macOS Gatekeeper warn about the desktop app: allow it once (on macOS,
+macOS Gatekeeper warn about the command-line build: allow it once (on macOS,
 right-click it and choose Open). To draw and edit on a computer, use the
 [web app](#the-workspace-in-a-browser-pwa).
 
@@ -66,14 +63,11 @@ crates/cad-dxf/      the DXF reader and writer                                (M
 crates/cad-native/   the native .cad format, and its DEFLATE and SHA-256 code (MIT OR Apache-2.0)
 crates/cad-core/     the core library on those four: drafting standards, editing commands,
                      units, font, rendering, raster and vector output
-crates/cad-view/     the viewport's logic with no GUI toolkit: view, grid, screen shapes, snap replies
 crates/cad-ffi/      bridge to the platform apps: the session (open drawings, undo, commands),
                      WebAssembly entry points for the browser, JNI entry points for Android
 apps/web/            the BlackCAD workbench as a browser app (PWA), installable on desktop and Android;
                      published at https://cad.mosaiciron.com/ (apps/web/README.md)
 apps/cad-cli/        `cad`, a command-line test build
-apps/viewport/       the desktop app (egui): menus, toolbar, command line, layers; opens, draws, edits and saves;
-                     its own workspace, built by the `viewport` workflow
 apps/android/        CAD Viewer, an Android test app (Java, Android's own APIs only)
 xtask/               `cargo xtask web`/`serve`: builds and serves the browser app;
                      `cargo xtask android`: builds the core for the Android app
@@ -385,7 +379,7 @@ and `--example native_bench` for size and speed on 200,000 entities
   and table/leader styles from the model. Password-protected drawings and
   signatures (the format reserves the flags). Paper-space drafting.
 - Apps: the Android viewer only views; saving from it needs the storage
-  design in `docs/ARCHITECTURE.md`. The desktop app (`apps/viewport`) draws and edits the basics (the web app has more); no iOS app yet.
+  design in `docs/ARCHITECTURE.md`. No desktop shells or iOS app yet: the plan is the web workbench in native windows (see `docs/DESIGN-DECISIONS.md`).
 - Unmodelled fields of decoded DWG objects are not kept in `.cad` yet.
   Hatch patterns (outlines only), TrueType fonts, angular and ordinate
   dimensions without a block, dimension styles from DWG.

@@ -7,18 +7,13 @@ before commercial release.
 
 ## Rules this project follows
 
-1. **No third-party code, with one named exception.** No crates, no
-   vendored sources, no copied snippets. The `Cargo.toml` files of the
-   workspace declare no dependencies; `cargo tree` shows only this
-   workspace. The exception is the desktop viewport, `apps/viewport`: a
-   separate workspace, excluded from the root one, that uses egui and
-   eframe (MIT OR Apache-2.0) to put `crates/cad-view`'s shapes in a
-   window. Everything it decides lives in `crates/cad-view`, which is
-   standard library only and is part of the dependency-free workspace; the
-   app is a thin layer that paints and reads the mouse, so it can be
-   replaced by another toolkit without touching the core. Its crates are
-   listed in `NOTICE`. A drawing is parsed by BlackCAD's own readers before
-   the toolkit sees it. The Android app uses only Android's own platform
+1. **No third-party code.** No crates, no vendored sources, no copied
+   snippets. The `Cargo.toml` files of the workspace declare no
+   dependencies; `cargo tree` shows only this workspace. (A desktop app in
+   Rust with egui, `apps/viewport`, was in the repository for a time as a
+   separate workspace; it was removed because BlackCAD's one UI is the
+   browser workbench. Its history is the branch `archive/egui-viewport`.)
+   The Android app uses only Android's own platform
    APIs (no AndroidX, Kotlin or other libraries), and CI fails the build if
    its APK contains any class from outside the app. Build tools (Gradle,
    the Android Gradle plugin, the Android SDK and NDK) build it but are not
@@ -28,10 +23,10 @@ before commercial release.
    WebAssembly module imports nothing.
 2. **Format knowledge comes from published specifications**, not from other
    implementations.
-3. **Code from CADCraft's egui canvas** (MIT OR Apache-2.0, storytold/cadcraft, the
-   upstream of the owner's CADCraft fork) is used with attribution in `NOTICE`:
-   the view transform, grid and drawing approach of its canvas, for
-   `crates/cad-view` and `apps/viewport`. Its DWG and DXF code (the
+3. **CADCraft's egui canvas** (MIT OR Apache-2.0, storytold/cadcraft, the
+   upstream of the owner's CADCraft fork) was the model for the removed
+   desktop app (the view transform, grid and drawing approach). That code is
+   no longer in the repository. Its DWG and DXF code (the
    `crates/dwg` directory and the acadrust crate) was **not** read, and the
    rule below stands.
 4. **Not consulted, at any point:** LibreDWG, libdxfrw, ACadSharp, acadrust

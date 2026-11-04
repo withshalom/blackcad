@@ -1,20 +1,11 @@
 # Changelog
 
 ## Unreleased
-- The desktop app (`apps/viewport`), and downloads of `main`. Menu bar,
-  toolbar, command line, layers panel; draws lines, circles, rectangles,
-  polylines and arcs by clicking or typing points; selects, erases, undo and
-  redo; opens and saves DWG, DXF and `.cad`. The first build (the
-  `main-latest` viewport) was only a canvas. `crates/cad-view` (standard library only, in the
-  dependency-free workspace) holds everything a viewer decides: the display
-  list decoded, the view (pan, zoom about the pointer, zoom to extents), the
-  grid, shapes clipped and flattened for the screen, the session's snap and
-  pick replies, and a `Viewer` that ties them to a session. `apps/viewport`
-  is the egui window that paints it (its own workspace; the one place with
-  third-party crates, see PROVENANCE.md), built by CI (the `viewport` job in
-  `build.yml`) and published with the other builds of `main` as the
-  `main-latest` pre-release; the README has download buttons for them. The design and algorithms follow CADCraft's egui canvas
-  (NOTICE).
+- Removed the Rust desktop app (`apps/viewport`) and its logic crate
+  (`crates/cad-view`), with their CI job, downloads and NOTICE entries.
+  BlackCAD's one UI is the browser workbench (`apps/web`); desktop, Android
+  and iOS shells will wrap it. The code is kept in the branch
+  `archive/egui-viewport`.
 - The native format's extension is `.cad` again (0.17.0 called it `.blc`).
   CADCraft's native format is `.cadcraft`; it shares the container and
   BlackCAD refuses it by name. The bytes and the format version (2.10) do
