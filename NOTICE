@@ -8,21 +8,8 @@ Code from other projects
 Code taken from another project is listed here with its source repository,
 revision, files, author and license, and keeps its own notice in the file.
 
-CADCraft (https://github.com/storytold/cadcraft, revision 2ac500925b6b),
-Copyright (c) the ArtCraft Team and CADCraft contributors, MIT OR Apache-2.0.
-The egui viewport's design and algorithms: the view transform and zoom about
-the pointer, the adaptive grid and its line-count guard, segment clipping
-and the way the canvas paints shapes with egui. They are re-written here
-for BlackCAD's display list and live in:
-  crates/cad-view/src/view.rs, grid.rs, draw.rs (std-only logic)
-  apps/viewport/src/main.rs, paint.rs (the egui and eframe layer)
-Only CADCraft's canvas and application shell were read. Its DWG and DXF code
-(crates/dwg, the acadrust crate) was not read; see docs/PROVENANCE.md.
-
-Third-party crates in apps/viewport
------------------------------------
-egui and eframe (https://github.com/emilk/egui), MIT OR Apache-2.0, rfd, the
-file dialogs (https://github.com/PolyMeilex/rfd), MIT, and the crates they
-depend on, as resolved in apps/viewport/Cargo.lock. They are
-linked into the desktop viewport only; nothing else in the repository
-depends on them.
+None at present. The desktop app that was written with the help of CADCraft's
+egui canvas (MIT OR Apache-2.0, ArtCraft Team and CADCraft contributors) and
+the egui, eframe and rfd crates has been removed from this repository; its
+history is the branch archive/egui-viewport, and its NOTICE entries are in
+that branch.

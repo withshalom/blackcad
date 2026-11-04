@@ -55,12 +55,5 @@ dependencies = [
 ]
 
 [[package]]
-name = "cad-view"
-version = "0.17.0"
-dependencies = [
- "cad-ffi",
-]
-
-[[package]]
 name = "xtask"
 version = "0.17.0"
