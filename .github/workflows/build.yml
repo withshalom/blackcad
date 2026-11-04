@@ -194,13 +194,76 @@ jobs:
           path: dist/BlackCAD.html
           archive: false
 
+  desktop:
+    # The desktop app (apps/desktop): one std-only program with the web
+    # workbench (the web job's build) embedded in it, which serves it on
+    # 127.0.0.1 and opens it in an app window of the Chromium-based browser on
+    # the computer. Built on each system for that system.
+    needs: [web]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: blackcad-desktop-linux-x86_64
+            bin: target/release/blackcad
+          - os: windows-latest
+            artifact: blackcad-desktop-windows-x86_64
+            bin: target/release/blackcad.exe
+          - os: macos-latest
+            artifact: blackcad-desktop-macos-arm64
+            bin: target/release/blackcad
+    runs-on: ${{ matrix.os }}
+    env:
+      BLACKCAD_WEB_DIR: ${{ github.workspace }}/dist/web
+      BLACKCAD_REQUIRE_WEB: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v8
+        with:
+          name: blackcad-web
+          path: dist/web
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+      - name: Lint
+        shell: bash
+        run: |
+          cargo clippy -p blackcad-desktop --all-targets -- -D warnings 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash .github/annotate-failure.sh "Desktop lint" "$RUNNER_TEMP/step.log"; exit 1; }
+      - name: Test
+        shell: bash
+        run: |
+          cargo test --release -p blackcad-desktop 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash .github/annotate-failure.sh "Desktop test" "$RUNNER_TEMP/step.log"; exit 1; }
+      - name: Build
+        shell: bash
+        run: |
+          cargo build --release -p blackcad-desktop 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash .github/annotate-failure.sh "Desktop build" "$RUNNER_TEMP/step.log"; exit 1; }
+      - name: Serves the workbench
+        # The built program answers with the page and the core.
+        shell: bash
+        run: |
+          "${{ matrix.bin }}" --no-window --port 47655 &
+          pid=$!
+          sleep 3
+          curl -fsS http://127.0.0.1:47655/ | grep -qi "<title"
+          curl -fsS -o /dev/null -w "core.wasm: %{size_download} bytes\n" http://127.0.0.1:47655/core.wasm
+          kill $pid
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.bin }}
+
   pages:
     # The web app and BlackCAD.html published from main once every job has
     # passed: the gh-pages branch holds a single commit, replaced each time,
     # which GitHub Pages serves (Settings → Pages → Build and deployment:
     # Deploy from a branch, gh-pages, / (root)).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, msrv, android, web]
+    needs: [build, msrv, android, web, desktop]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -230,7 +293,7 @@ jobs:
 
   release:
     # The downloads of the latest main, once every job has passed: the
-    # command-line builds, the Android APK, the web app and
+    # command-line builds, the desktop app, the Android APK, the web app and
     # BlackCAD.html, as
     # the files of one pre-release tagged main-latest, replaced on each push
     # (package-release.sh names the files, publish-release.sh publishes them;
@@ -238,7 +301,7 @@ jobs:
     # stands in for a numbered release: those are tags made by hand
     # (CONTRIBUTING.md).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, msrv, android, web]
+    needs: [build, msrv, android, web, desktop]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -255,6 +318,11 @@ jobs:
           # Each artifact in a folder of its own name: the three command-line
           # builds and the APK.
           pattern: cad-*
+          path: artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          # The desktop app for each system, in folders of their own names.
+          pattern: blackcad-desktop-*
           path: artifacts
       - uses: actions/download-artifact@v8
         with:
