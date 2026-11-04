@@ -17,7 +17,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-pub const OPEN_EXTENSIONS: [&str; 3] = ["dwg", "dxf", "blc"];
+pub const OPEN_EXTENSIONS: [&str; 4] = ["dwg", "dxf", "cad", "blc"];
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_BODY: usize = 64 * 1024;
 /// The page polls every second; a minimised window's timers may slow to
@@ -93,11 +93,11 @@ impl Shared {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Queue a drawing for the page to open. Only .dwg, .dxf and .blc files.
+    /// Queue a drawing for the page to open. Only .dwg, .dxf, .cad and the older .blc files.
     pub fn add_file(&self, path: &Path) -> Result<(), String> {
         let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
         if !OPEN_EXTENSIONS.contains(&ext.as_str()) {
-            return Err(format!("{}: not a .dwg, .dxf or .blc file", path.display()));
+            return Err(format!("{}: not a .dwg, .dxf or .cad file", path.display()));
         }
         let path = std::fs::canonicalize(path).map_err(|e| format!("{}: {e}", path.display()))?;
         if !path.is_file() {
@@ -446,7 +446,7 @@ mod tests {
             ),
         );
         assert!(r.contains("windows=0"), "{r}");
-        assert!(r.contains("not a .dwg, .dxf or .blc"));
+        assert!(r.contains("not a .dwg, .dxf or .cad"));
         let poll = format!("POST /__desktop/poll HTTP/1.1\r\nHost: {host}\r\nX-BlackCAD-Token: {}\r\n\r\n", sh.page_token);
         let first = http(p, &poll);
         let line = first.split("\r\n\r\n").nth(1).unwrap_or_default();

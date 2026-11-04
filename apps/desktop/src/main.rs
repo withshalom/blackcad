@@ -28,7 +28,7 @@ const WINDOW_GRACE: Duration = Duration::from_secs(90);
 
 const HELP: &str = "BlackCAD desktop
 
-Usage: blackcad [OPTIONS] [FILE.dwg|FILE.dxf|FILE.blc ...]
+Usage: blackcad [OPTIONS] [FILE.dwg|FILE.dxf|FILE.cad ...]
 
 Options:
   --web-dir DIR   serve the workbench from DIR instead of the built-in copy

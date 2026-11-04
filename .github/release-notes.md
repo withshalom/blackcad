@@ -2,6 +2,7 @@ Builds of `main` at [`{short}`](https://github.com/{repo}/commit/{sha}), made by
 
 | File | What it is |
 |---|---|
+| `blackcad-desktop-windows-x86_64.zip`<br>`blackcad-desktop-macos-arm64.tar.gz`<br>`blackcad-desktop-linux-x86_64.tar.gz` | The desktop app: the web workbench in its own window. Unpack it and run `blackcad`, or `blackcad drawing.dwg`. It opens in an app window of Chrome, Edge, Brave or Chromium, so one of them must be installed. Drawings stay on the computer. |
 | `BlackCAD.html` | The whole workbench in one file (about 4 MB). Open it in a browser by double-clicking; it needs no server. It cannot be installed. |
 | `blackcad-web.zip` | The installable web app (PWA). Unzip it and serve the folder over HTTPS, or `localhost`, to install it. |
 | `blackcad-viewer-android-debug.apk` | CAD Viewer, the Android test app. |

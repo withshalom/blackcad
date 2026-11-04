@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- The desktop app (`apps/desktop`): one std-only program with the web workbench
+  embedded, served on 127.0.0.1 and opened in an app window of the
+  Chromium-based browser on the computer; drawings given on the command line
+  (`.dwg`, `.dxf`, `.cad`) open in it. CI builds it for Windows, macOS and
+  Linux and the `main-latest` release offers it.
 - Removed the Rust desktop app (`apps/viewport`) and its logic crate
   (`crates/cad-view`), with their CI job, downloads and NOTICE entries.
   BlackCAD's one UI is the browser workbench (`apps/web`); desktop, Android
