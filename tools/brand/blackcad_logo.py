@@ -2,27 +2,32 @@
 """Draw BlackCAD's icon and logo.
 
 Original artwork made for BlackCAD (MIT OR Apache-2.0), in the workbench's
-own look: a blackboard-black tile with a faint chalk grid (blackboard and
-blueprint, "Blackprint"), and on it a shop part, a lifting lug, drafted in
-the default layers' colours: VISIBLE white, centerlines yellow (long-short
-dash), dimensions green. Beside it the wordmark as the welcome screen sets
-it: "Black" in chalk handwriting, "CAD" in bold outlined drafting letters.
+own look: the black of model space with its light grey grid, and on it a
+large handwritten B in white chalk (blackboard and blueprint,
+"Blackprint"). The large version has the centerline layer's yellow
+centerlines crossing behind the B; the small one, for app icons, leaves
+them out. Beside it the wordmark as the welcome screen sets it: "Black" in
+chalk handwriting, "CAD" in bold outlined drafting letters.
 
 The letters are set in Patrick Hand (Black) and Inter ExtraBold (CAD), both
 SIL Open Font License 1.1, and converted to outlines, so the logo needs no
 font to show and no font file lives in this repository.
 
-    python3 tools/brand/blackcad_logo.py FONTS_DIR
+    python3 tools/brand/blackcad_logo.py FONTS_DIR [lines|dots]
 
 FONTS_DIR holds patrick-hand-latin-400-normal.woff2 and
 inter-latin-800-normal.woff2 (npm: @fontsource/patrick-hand,
 @fontsource/inter; their files/ folders). Needs fontTools and brotli
 (pip install fonttools brotli). Writes:
 
-    docs/images/blackcad-icon.svg       the icon, 1024 x 1024
-    docs/images/blackcad-logo.svg       icon and wordmark, for light backgrounds
-    docs/images/blackcad-logo-dark.svg  the same, for dark backgrounds
-    apps/web/icons/icon.svg             the icon, for the web app and its PNGs
+    docs/images/blackcad-icon.svg              the plain icon, 1024 x 1024: small things
+    docs/images/blackcad-icon-centerlines.svg  the icon with centerlines: large things
+    docs/images/blackcad-logo.svg              icon (with centerlines) and wordmark,
+                                               for light backgrounds
+    docs/images/blackcad-logo-dark.svg         the same, for dark backgrounds
+    apps/web/icons/icon.svg                    the plain icon, for the web app
+
+docs/BRAND.md says which goes where.
 
 then, when rsvg-convert is installed, the web app's PNGs
 (apps/web/icons/icon-192.png, icon-512.png, icon-maskable-512.png) and
@@ -43,12 +48,9 @@ from fontTools.ttLib import TTFont
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # The workbench's colours (apps/web/style.css).
-BOARD_TOP = "#151a1f"
-BOARD_BOTTOM = "#07090b"
 WHITE = "#ffffff"
 CHALK = "#eef0e8"  # --chalk, the Blackboard's
 YELLOW = "#ffe14d"  # centerlines
-GREEN = "#3ddc84"  # dimensions (--ok)
 INK = "#0d1013"  # --space, model space
 SLATE = "#1d2329"  # chalk on a light page
 GRID_GREY = "#c9ced4"  # the grid, light grey
@@ -149,10 +151,13 @@ def centerlines():
     )
 
 
-def icon(fonts, grid, maskable=False):
-    """The icon as an SVG document. A maskable one fills the square and
+def icon(fonts, grid, maskable=False, lines=True):
+    """The icon as an SVG document. With `lines`, the centerlines cross
+    behind the B (for the logo, the README, advertising and landing pages);
+    without, the plain B (for small things: app icons, favicons), where
+    the centerlines would only blur. A maskable one fills the square and
     keeps the B inside the safe circle launchers crop to."""
-    b = centerlines() + "\n  " + big_b(fonts)
+    b = (centerlines() + "\n  " if lines else "") + big_b(fonts)
     if maskable:
         b = f'<g transform="translate({S * 0.1:.1f} {S * 0.1:.1f}) scale(0.8)">{b}</g>'
     return (
@@ -229,17 +234,21 @@ def main():
         sys.exit(__doc__)
     fonts = sys.argv[1]
     grid = sys.argv[2] if len(sys.argv) == 3 else "lines"
-    write("docs/images/blackcad-icon.svg", icon(fonts, grid))
-    write("apps/web/icons/icon.svg", icon(fonts, grid))
+    # Large: the logo and the icon with centerlines.
+    write("docs/images/blackcad-icon-centerlines.svg", icon(fonts, grid))
     write("docs/images/blackcad-logo.svg", logo(fonts, dark=False, grid=grid))
     write("docs/images/blackcad-logo-dark.svg", logo(fonts, dark=True, grid=grid))
+    # Small: the plain B, for every app icon.
+    plain = icon(fonts, grid, lines=False)
+    write("docs/images/blackcad-icon.svg", plain)
+    write("apps/web/icons/icon.svg", plain)
     if not shutil.which("rsvg-convert"):
         print("rsvg-convert not found: the PNGs were not made")
         return
     scratch = os.path.join(ROOT, "target", "brand")
     os.makedirs(scratch, exist_ok=True)
     with open(os.path.join(scratch, "maskable.svg"), "w") as f:
-        f.write(icon(fonts, grid, maskable=True))
+        f.write(icon(fonts, grid, maskable=True, lines=False))
     png("apps/web/icons/icon.svg", "apps/web/icons/icon-192.png", 192)
     png("apps/web/icons/icon.svg", "apps/web/icons/icon-512.png", 512)
     png("target/brand/maskable.svg", "apps/web/icons/icon-maskable-512.png", 512)

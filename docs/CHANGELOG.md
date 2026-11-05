@@ -5,8 +5,10 @@
   on black model space, with a light grey grid and yellow centerlines
   passing behind it; the logo sets it beside "Black" in chalk and "CAD" in
   bold outlined letters, as the welcome screen does. The README opens with
-  it, and the web app and the Windows, macOS, Linux and Android apps use the
-  icon. `tools/brand/blackcad_logo.py` draws them.
+  it. The apps' icons (web, Windows, macOS, Linux, Android) use the plain
+  version, without centerlines, which stays clear at small sizes;
+  `docs/BRAND.md` says which version goes where.
+  `tools/brand/blackcad_logo.py` draws them.
 - BlackCAD is an application for Windows, macOS, Linux and Android
   (`apps/shell`, Tauri 2): the workbench runs in the system's own webview and
   the Rust engine runs natively in the same process, with the computer's
