@@ -1644,6 +1644,8 @@ fn read_kind(r: &mut TagReader) -> Result<ObjectKind> {
                 xref_path: r.str_or(1, "")?,
                 description: r.str_or(4, "")?,
                 insert_units: r.u16_or(c::INSERT_UNITS, 0)?,
+                // Not stored in the format yet: it needs a new format version.
+                not_explodable: false,
                 block_entity: r.opt_handle(c::BLOCK_ENTITY)?,
                 entities: get_handles_or(r)?,
                 first_entity: r.opt_handle(c::FIRST)?,

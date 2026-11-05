@@ -991,7 +991,7 @@ impl<'a> Writer<'a> {
                 self.h(340, layout);
                 let _ = flags;
                 self.i(70, b.insert_units as i64);
-                self.i(280, 1);
+                self.i(280, if b.not_explodable { 0 } else { 1 });
                 self.i(281, 0);
             }
             _ => return,
