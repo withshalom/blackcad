@@ -48,3 +48,32 @@ fn current_layer_is_found_whatever_its_letter_case() {
     }
 }
 
+fn mtext_contents(d: &Drawing) -> Vec<String> {
+    d.model_space_entities()
+        .iter()
+        .filter_map(|o| match &o.kind {
+            ObjectKind::MText(m) => Some(m.contents.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn caret_encoded_text_reads_as_the_text_it_stands_for() {
+    // "^ " is a caret; "^J" a line feed; "^I" a tab.
+    let d = read_bytes(&dxf(&[
+        "0", "SECTION", "2", "ENTITIES",
+        "0", "MTEXT", "8", "0", "10", "0", "20", "0", "30", "0", "40", "1", "1", "^  C",
+        "0", "MTEXT", "8", "0", "10", "0", "20", "0", "30", "0", "40", "1", "1", "a^Jb^Ic",
+        "0", "MTEXT", "8", "0", "10", "0", "20", "0", "30", "0", "40", "1", "1", "x^",
+        "0", "ENDSEC", "0", "EOF",
+    ]))
+    .unwrap();
+    let want = ["^ C", "a\nb\tc", "x^"];
+    assert_eq!(mtext_contents(&d), want);
+    assert_eq!(mtext_contents(&through_dwg(&d)), want, "DWG keeps the text, not its DXF encoding");
+    // Written again, it reads back the same.
+    let again = read_bytes(&cad_core::dxf::to_bytes(&d, cad_core::dxf::DxfFormat::Ascii).bytes).unwrap();
+    assert_eq!(mtext_contents(&again), want);
+}
+
