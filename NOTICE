@@ -19,6 +19,12 @@ crates they depend on, each under its own licence as listed in
 apps/shell/Cargo.lock; the shipped app includes them. The engine crates
 use only the Rust standard library. See docs/PROVENANCE.md.
 
+Fonts
+-----
+The logo's letters are outlines from Patrick Hand (Copyright 2010-2012
+Patrick Wagesreiter) and Inter (Copyright 2016 The Inter Project Authors),
+both under the SIL Open Font License 1.1. No font file is included.
+
 Removed: the desktop app that was written with the help of CADCraft's
 egui canvas (MIT OR Apache-2.0, ArtCraft Team and CADCraft contributors) and
 the egui, eframe and rfd crates has been removed from this repository; its
