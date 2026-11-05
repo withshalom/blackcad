@@ -36,7 +36,7 @@ The engine crates stay std-only. See `docs/PROVENANCE.md` and `NOTICE`.
 
 ## Build
 
-Needs Rust, Node (for the Tauri command line, run through `npx`) and, on
+Needs Rust, Node (for the Tauri command line, pinned in `package.json`; `npm ci` installs it) and, on
 Linux, WebKitGTK 4.1 (`libwebkit2gtk-4.1-dev` and the packages in
 `.github/workflows/build.yml`, job `app`).
 
@@ -44,7 +44,7 @@ Linux, WebKitGTK 4.1 (`libwebkit2gtk-4.1-dev` and the packages in
 cargo xtask web                       # the workbench, into dist/web
 cd apps/shell
 cargo run                             # a development build, in a window
-npx @tauri-apps/cli@2 build           # the release build and this system's installers
+npm ci && npm run tauri build      # the release build and this system's installers
 ```
 
 Installers land in `apps/shell/target/release/bundle/`: `.msi` and
@@ -55,9 +55,9 @@ setup `.exe` on Windows, `.dmg` and `.app` on macOS
 Android, with the Android SDK and NDK installed (`NDK_HOME` set):
 
 ```sh
-npx @tauri-apps/cli@2 android init    # generates gen/android from tauri.conf.json
+npm run tauri -- android init    # generates gen/android from tauri.conf.json
 cp -R icons/android/. gen/android/app/src/main/res/
-npx @tauri-apps/cli@2 android build --apk --target aarch64 --target armv7 --target x86_64
+npm run tauri -- android build --apk --target aarch64 --target armv7 --target x86_64
 ```
 
 CI (`app` and `app-android` jobs) does all of this on every push and the

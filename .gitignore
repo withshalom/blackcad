@@ -12,3 +12,6 @@
 # The app: its build, and what Tauri generates (schemas, the Android project).
 /apps/shell/target
 /apps/shell/gen
+
+# The Tauri command line (npm ci).
+/apps/shell/node_modules

@@ -1,0 +1,12 @@
+{
+  "name": "blackcad-app",
+  "private": true,
+  "description": "The Tauri command line that builds BlackCAD the application (apps/shell). Nothing here ships in the app.",
+  "license": "MIT OR Apache-2.0",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}

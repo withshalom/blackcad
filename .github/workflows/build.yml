@@ -265,8 +265,10 @@ jobs:
         shell: bash
         working-directory: apps/shell
         run: |
+          # The Tauri command line, at the version in package-lock.json.
+          npm ci --no-audit --no-fund
           # The web job built dist/web already.
-          npx --yes @tauri-apps/cli@2 build ${{ matrix.args }} --ci --config '{"build":{"beforeBuildCommand":""}}' 2>&1 | tee "$RUNNER_TEMP/step.log" \
+          npm run tauri -- build ${{ matrix.args }} --ci --config '{"build":{"beforeBuildCommand":""}}' 2>&1 | tee "$RUNNER_TEMP/step.log" \
             || { bash ../../.github/annotate-failure.sh "App build" "$RUNNER_TEMP/step.log"; exit 1; }
       - uses: actions/upload-artifact@v6
         with:
@@ -301,7 +303,10 @@ jobs:
         working-directory: apps/shell
         run: |
           export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
-          npx --yes @tauri-apps/cli@2 android init --ci 2>&1 | tee "$RUNNER_TEMP/step.log" \
+          # The Tauri command line, at the version in package-lock.json. The
+          # Android build calls it back through `npm run tauri`.
+          npm ci --no-audit --no-fund
+          npm run tauri -- android init --ci 2>&1 | tee "$RUNNER_TEMP/step.log" \
             || { bash ../../.github/annotate-failure.sh "Android project" "$RUNNER_TEMP/step.log"; exit 1; }
           cp -R icons/android/. gen/android/app/src/main/res/
       - name: APK
@@ -309,7 +314,7 @@ jobs:
         working-directory: apps/shell
         run: |
           export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
-          npx --yes @tauri-apps/cli@2 android build --apk --ci --target aarch64 --target armv7 --target x86_64 --config '{"build":{"beforeBuildCommand":""}}' 2>&1 | tee "$RUNNER_TEMP/step.log" \
+          npm run tauri -- android build --apk --ci --target aarch64 --target armv7 --target x86_64 --config '{"build":{"beforeBuildCommand":""}}' 2>&1 | tee "$RUNNER_TEMP/step.log" \
             || { bash ../../.github/annotate-failure.sh "Android build" "$RUNNER_TEMP/step.log"; exit 1; }
       - name: Sign
         # With the upload keystore in the repository's secrets
