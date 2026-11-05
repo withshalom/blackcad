@@ -77,3 +77,17 @@ fn caret_encoded_text_reads_as_the_text_it_stands_for() {
     assert_eq!(mtext_contents(&again), want);
 }
 
+#[test]
+fn a_drawing_with_the_last_handle_used_saves() {
+    let mut d = read_bytes(&dxf(&[
+        "0", "SECTION", "2", "ENTITIES",
+        "0", "LINE", "5", "FFFFFFFFFFFFFFFF", "100", "AcDbEntity", "8", "0", "100", "AcDbLine", "10", "0", "20", "0", "30", "0", "11", "1", "21", "0", "31", "0",
+        "0", "ENDSEC", "0", "EOF",
+    ]))
+    .unwrap();
+    d.header.handseed = Some(u64::MAX);
+    // Neither writer overflows working out the next free handle.
+    let out = cad_core::dxf::to_bytes(&d, cad_core::dxf::DxfFormat::Ascii);
+    assert!(!out.bytes.is_empty());
+    let _ = cad_core::dwg::write::to_bytes(&d);
+}

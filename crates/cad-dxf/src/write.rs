@@ -696,7 +696,7 @@ impl<'a> Writer<'a> {
     /// The next free handle.
     fn handseed(&self) -> u64 {
         let max = self.d.objects.keys().last().map(|h| h.0).unwrap_or(0);
-        self.d.header.handseed.unwrap_or(0).max(max + 1)
+        self.d.header.handseed.unwrap_or(0).max(max.saturating_add(1))
     }
 
     fn classes(&mut self) {
