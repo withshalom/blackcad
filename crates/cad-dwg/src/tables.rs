@@ -93,7 +93,7 @@ pub(crate) fn block_header(s: &mut Streams) -> Result<(BlockHeader, BlockHeaderC
     }
     if s.ver >= V::R2007 {
         b.insert_units = s.dat.bs()?;
-        let _explodable = s.dat.b()?;
+        b.not_explodable = !s.dat.b()?;
         let _scaling = s.dat.rc()?;
     }
     Ok((

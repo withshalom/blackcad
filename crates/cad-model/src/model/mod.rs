@@ -1150,6 +1150,10 @@ pub struct BlockHeader {
     pub xref_path: String,
     pub description: String,
     pub insert_units: u16,
+    /// Whether EXPLODE may break its references apart (DXF 280, DWG from
+    /// R2007). AutoCAD's blocks are explodable unless set otherwise, so the
+    /// model stores the exception.
+    pub not_explodable: bool,
     pub block_entity: Handle,
     /// Owned entities in order (R2004+). Empty for R13–R2000, where the
     /// first/last pair and entity owners are used instead.

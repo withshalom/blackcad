@@ -1148,6 +1148,7 @@ impl Reader {
                     xref_path: String::new(),
                     description: String::new(),
                     insert_units: b.i(70, 0) as u16,
+                    not_explodable: b.i(280, 1) == 0,
                     block_entity: Handle::NULL,
                     entities: Vec::new(),
                     first_entity: Handle::NULL,

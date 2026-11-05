@@ -1471,7 +1471,7 @@ fn block_header(w: &mut ObjW, o: &Object, b: &BlockHeader, d: &Drawing) {
     w.dat.bl(0); // no preview
     if ver >= V::R2007 {
         w.dat.bs(b.insert_units);
-        w.dat.b(true); // explodable
+        w.dat.b(!b.not_explodable);
         w.dat.rc(0); // scaling: any
     }
     common_handles(w, o);

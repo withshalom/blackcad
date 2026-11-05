@@ -170,6 +170,7 @@ pub(super) fn sample() -> Drawing {
                 xref_path: "C:\\parts\\flange.dwg".into(),
                 description: "6in flange".into(),
                 insert_units: 1,
+                not_explodable: false,
                 block_entity: Handle(0x41),
                 entities: vec![],
                 first_entity: Handle(0x42),
