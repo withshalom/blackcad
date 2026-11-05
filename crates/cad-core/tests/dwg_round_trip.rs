@@ -101,3 +101,30 @@ fn single_insert_is_not_an_array() {
     assert_eq!(array_of(only(&d, "INSERT")), None);
 }
 
+fn one_mtext(groups: &[&str]) -> Drawing {
+    let mut l: Vec<&str> = vec!["0", "SECTION", "2", "ENTITIES", "0", "MTEXT", "8", "0", "10", "0.0", "20", "0.0", "30", "0.0", "40", "2.5", "1", "text"];
+    l.extend_from_slice(groups);
+    l.extend_from_slice(&["0", "ENDSEC", "0", "EOF"]);
+    read_bytes(&dxf(&l)).unwrap()
+}
+
+fn mtext_of(d: &Drawing) -> MText {
+    match &only(d, "MTEXT").kind {
+        ObjectKind::MText(m) => m.clone(),
+        k => panic!("{k:?}"),
+    }
+}
+
+#[test]
+fn mtext_line_spacing_style_is_kept() {
+    for (style, want) in [("2", true), ("1", false)] {
+        let d = one_mtext(&["73", style, "44", "0.25"]);
+        for (pass, d) in [("DXF", d.clone()), ("DWG", through_dwg(&d))] {
+            let m = mtext_of(&d);
+            assert_eq!(m.linespacing_exact, want, "{pass}");
+            assert_eq!(m.linespacing_factor, 0.25, "{pass}");
+        }
+    }
+    // Missing: "at least".
+    assert!(!mtext_of(&one_mtext(&[])).linespacing_exact);
+}

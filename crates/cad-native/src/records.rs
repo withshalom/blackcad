@@ -1470,6 +1470,8 @@ fn read_kind(r: &mut TagReader) -> Result<ObjectKind> {
             drawing_dir: r.u16_or(72, 1)?,
             contents: r.str(1)?,
             linespacing_factor: r.f64_or(44, 1.0)?,
+            // Not stored in the format yet: it needs a new format version.
+            linespacing_exact: false,
             style: r.opt_handle(c::STYLE)?,
         }),
         kind::INSERT => {

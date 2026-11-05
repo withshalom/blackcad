@@ -1075,7 +1075,7 @@ fn mtext_data(w: &mut ObjW, m: &MText, text_width: &dyn Fn(&str) -> f64) {
     w.dat.bd(ext_h);
     w.dat.bd(ext_w);
     w.tv(&m.contents);
-    w.dat.bs(1); // line spacing style: at least
+    w.dat.bs(if m.linespacing_exact { 2 } else { 1 }); // 1 at least, 2 exactly
     w.dat.bd(m.linespacing_factor);
     w.dat.b(false);
     if ver >= V::R2004 {

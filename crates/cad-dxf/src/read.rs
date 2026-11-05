@@ -1603,6 +1603,7 @@ impl Reader {
                     drawing_dir: b.i(72, 1) as u16,
                     contents,
                     linespacing_factor: b.f(44, 1.0),
+                    linespacing_exact: b.i(73, 1) == 2,
                     style: style_of(self, &b),
                 })
             }

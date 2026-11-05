@@ -564,7 +564,7 @@ pub(crate) fn mtext(s: &mut Streams) -> Result<MText> {
     let _ext_width = s.dat.bd()?;
     m.contents = s.tv()?;
     if s.ver >= V::R2000 {
-        let _linespacing_style = s.dat.bs()?;
+        m.linespacing_exact = s.dat.bs()? == 2;
         m.linespacing_factor = s.dat.bd()?;
         let _unknown = s.dat.b()?;
     }

@@ -1473,7 +1473,7 @@ impl<'a> Writer<'a> {
                 if m.x_axis != Vec3::X && m.x_axis != Vec3::ZERO {
                     self.p3(11, m.x_axis);
                 }
-                self.i(73, 1);
+                self.i(73, if m.linespacing_exact { 2 } else { 1 });
                 self.r(44, m.linespacing_factor);
             }
             ObjectKind::Insert(ins) => {
