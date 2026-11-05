@@ -116,6 +116,18 @@ fn mtext_of(d: &Drawing) -> MText {
 }
 
 #[test]
+fn mtext_rotation_without_an_x_axis_sets_the_direction() {
+    let d = one_mtext(&["50", "90.0"]);
+    for (pass, d) in [("DXF", d.clone()), ("DWG", through_dwg(&d))] {
+        let x = mtext_of(&d).x_axis;
+        assert!(x.x.abs() < 1e-12 && (x.y - 1.0).abs() < 1e-12, "{pass}: {x:?}");
+    }
+    // The x-axis wins when both are given.
+    let d = one_mtext(&["11", "1.0", "21", "0.0", "31", "0.0", "50", "90.0"]);
+    assert_eq!(mtext_of(&d).x_axis, cad_core::geom::Vec3::X);
+}
+
+#[test]
 fn mtext_line_spacing_style_is_kept() {
     for (style, want) in [("2", true), ("1", false)] {
         let d = one_mtext(&["73", style, "44", "0.25"]);

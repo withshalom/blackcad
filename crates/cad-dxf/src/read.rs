@@ -107,6 +107,24 @@ fn vh(v: &Value) -> Handle {
     }
 }
 
+/// MTEXT's text direction in WCS: the x-axis (11) when the record gives
+/// one, otherwise the rotation angle (50) turned from the OCS x-axis,
+/// otherwise WCS x. The DXF reference describes 50 as radians, but the
+/// files met in practice (CADCraft's among them) write it in degrees like
+/// every other DXF angle, so it is read as degrees. To be checked against
+/// a file AutoCAD writes with group 50.
+fn mtext_x_axis(b: &G<'_>) -> Vec3 {
+    if b.get(11).is_some() || b.get(50).is_none() {
+        return b.p3(11, Vec3::X);
+    }
+    let angle = b.a(50, 0.0);
+    if !angle.is_finite() {
+        return Vec3::X;
+    }
+    let (ax, ay, _) = crate::geom::arbitrary_axes(b.p3(210, Vec3::Z));
+    ax * angle.cos() + ay * angle.sin()
+}
+
 /// Radians for a DXF angle in degrees, chosen so that the writer gives
 /// the same degrees back (the conversion can be a unit in the last place
 /// off either way).
@@ -1595,7 +1613,7 @@ impl Reader {
                 ObjectKind::MText(MText {
                     insertion: b.p3(10, Vec3::ZERO),
                     extrusion: b.p3(210, Vec3::Z),
-                    x_axis: b.p3(11, Vec3::X),
+                    x_axis: mtext_x_axis(&b),
                     rect_width: b.f(41, 0.0),
                     rect_height: b.f(46, 0.0),
                     text_height: b.f(40, 0.0),
