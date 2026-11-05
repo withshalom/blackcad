@@ -819,7 +819,16 @@ impl Reader {
             *self.skipped.entry(format!("{} without a handle", o.type_name)).or_default() += 1;
             return;
         }
-        self.d.objects.insert(o.handle, o);
+        // Handles are unique in a sound file. A later record with a handle
+        // already used replaces the earlier one, and the reader says so
+        // rather than losing it quietly.
+        let later = o.type_name.clone();
+        if let Some(earlier) = self.d.objects.insert(o.handle, o) {
+            *self
+                .skipped
+                .entry(format!("{} replaced by a later {later} with the same handle", earlier.type_name))
+                .or_default() += 1;
+        }
     }
 
     fn xdata(&self, groups: &[Group]) -> Vec<XData> {
