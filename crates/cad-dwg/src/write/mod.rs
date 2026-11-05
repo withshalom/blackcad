@@ -10,6 +10,7 @@
 //! against its MI-201 file byte for byte where the content is the same
 //! (`tests`).
 
+mod check;
 pub(crate) mod container;
 pub(crate) mod objects;
 pub(crate) mod sections;
@@ -24,6 +25,8 @@ use crate::model::*;
 use container::{Section, MAX_PAGE};
 use objects::Ctx;
 use std::collections::BTreeMap;
+
+pub use check::{check, Check};
 
 /// A DWG file and what the writer had to leave out.
 #[derive(Debug, Clone)]
