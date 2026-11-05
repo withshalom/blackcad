@@ -568,3 +568,11 @@ pre.summary { white-space: pre-wrap; font: 11.5px/1.5 var(--mono); color: var(--
   #print-sheet { --slate: #fff; }
   @page { margin: 14mm; }
 }
+
+/* Inside the BlackCAD application (host.js settleIntoApp): a program, not a
+   page. The interface is not selectable text and does not drag; fields,
+   the command line and the drawing summary still are. */
+.in-app body { -webkit-user-select: none; user-select: none; overscroll-behavior: none; -webkit-touch-callout: none; }
+.in-app input, .in-app textarea, .in-app pre, .in-app [contenteditable] { -webkit-user-select: text; user-select: text; }
+.in-app img, .in-app svg, .in-app a, .in-app button { -webkit-user-drag: none; }
+.in-app .install { display: none !important; }

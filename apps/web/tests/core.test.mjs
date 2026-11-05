@@ -18,7 +18,7 @@ if (!wasmPath) {
 // The single-file page's way in: core.js reads the module from this global
 // instead of fetching it, which Node cannot do from a path.
 globalThis.CAD_CORE_WASM = readFileSync(wasmPath).toString("base64");
-const { Core, CoreCrash } = await import("../core.js");
+const { WasmEngine, Core, CoreCrash, latestWins, parseDisplay } = await import("../core.js");
 
 let failures = 0;
 async function check(name, fn) {
@@ -47,7 +47,9 @@ const entities = (core, id) => {
 };
 const textOf = (b) => new TextDecoder().decode(b.subarray(0, 64));
 
-const core = await Core.load();
+// Most checks drive core.wasm directly through its synchronous glue; the
+// asynchronous `Core` the app uses is checked at the end.
+const core = await WasmEngine.load();
 
 await check("the core names itself and is this tree's version", () => {
   const toml = readFileSync(new URL("../../../Cargo.toml", import.meta.url), "utf8");
@@ -218,6 +220,63 @@ await check("damaged and random input is refused without crashing the core", () 
   }
   expect(!core.crashed, "the core is marked crashed");
   core.close(core.sample());
+});
+
+// ---- the asynchronous Core, as app.js uses it (here on Node's one thread;
+// in the page it runs core.wasm in a Worker, in the app the native engine).
+
+const acore = await Core.load("core.wasm", { worker: false });
+
+await check("the async core names itself as the sync glue does", () => {
+  expect(acore.version === core.version, `async "${acore.version}", sync "${core.version}"`);
+  expect(acore.engine === "wasm", `engine is ${acore.engine}`);
+});
+
+await check("async calls run in the order they were made", async () => {
+  const id = await acore.newDrawing(false);
+  // Fired without waiting: each must see the ones before it.
+  const made = [];
+  for (let i = 0; i < 20; i++) made.push(acore.exec(id, `line ${i} 0 ${i} 10`));
+  const undo = acore.exec(id, "undo");
+  const info = acore.info(id);
+  const rs = await Promise.all(made);
+  await undo;
+  const i = await info;
+  expect(rs.every((r) => r.handles?.length === 1), "a line made nothing");
+  expect(i.undo === 19 && i.redo === 1, `after 20 lines and one undo: undo ${i.undo}, redo ${i.redo}`);
+  await acore.close(id);
+});
+
+await check("an async error leaves the queue working", async () => {
+  const id = await acore.newDrawing(false);
+  const bad = acore.exec(id, "no-such-command 1 2").then(() => "ok", (e) => e);
+  const good = acore.exec(id, "line 0 0 5 5");
+  const e = await bad;
+  expect(e instanceof Error && !(e instanceof CoreCrash), "a bad command did not fail as an ordinary error");
+  expect((await good).handles.length === 1, "the call after a failed one did not run");
+  expect((await acore.query(id, "no-such-command")) === null, "query does not answer null for a failure");
+  await acore.close(id);
+});
+
+await check("async display lists and saves match the sync glue", async () => {
+  const a = await acore.sample();
+  const b = core.sample();
+  const da = await acore.display(a), db = core.display(b);
+  expect(da.items.length === db.items.length && da.items.length > 0, `items: async ${da.items.length}, sync ${db.items.length}`);
+  const sa = await acore.save(a, "dxf"), sb = core.save(b, "dxf");
+  expect(sa.bytes instanceof Uint8Array && Math.abs(sa.bytes.length - sb.bytes.length) < 64, `dxf sizes ${sa.bytes.length} and ${sb.bytes.length}`);
+  expect(parseDisplay(core.displayBytes(b)).items.length === db.items.length, "displayBytes does not parse to the display");
+  await acore.close(a);
+  core.close(b);
+});
+
+await check("latest-wins drops answers that were overtaken", async () => {
+  const ask = latestWins();
+  const slow = ask(() => new Promise((r) => setTimeout(() => r("slow"), 20)));
+  const fast = ask(() => Promise.resolve("fast"));
+  expect((await fast) === "fast", "the newest answer was dropped");
+  expect((await slow) === latestWins.stale, "an overtaken answer was used");
+  ask.cancel();
 });
 
 if (failures) {

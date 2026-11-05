@@ -13,6 +13,8 @@ const SHELL = [
   "style.css",
   "app.js",
   "core.js",
+  "core-worker.js",
+  "host.js",
   "icons.js",
   "core.wasm",
   "manifest.webmanifest",

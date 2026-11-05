@@ -17,7 +17,9 @@ Published from `main` at <https://cad.mosaiciron.com/> (see
 | `index.html` | The page: every panel's markup, and the Blackboard's frame. Loads `style.css` and `app.js`. |
 | `style.css` | The look: colour tokens on `:root`, desktop and phone layouts, the Blackboard's chalk. |
 | `app.js` | The shell: boots the core, draws its display list on the canvas, routes pointer, touch and keyboard input, runs commands as prompt sequences (as a CAD command line does), and drives the panels and files. Its last section is the Blackboard: lessons in drafting, shop practice and electronics, each figure drawn from the numbers its formulas use. Sections are marked `// ----`. |
-| `core.js` | The only glue to the core: loads `core.wasm`, wraps its entry points (`crates/cad-ffi/src/web.rs`) and reads its display list. Restarts the core after a crash. |
+| `core.js` | The only glue to the core. `Core` is the asynchronous interface app.js uses; it answers calls in order from the best engine there is: the native engine inside the BlackCAD application, else `core.wasm` in a Worker, else `core.wasm` on the page's thread. `WasmEngine` wraps `core.wasm`'s entry points (`crates/cad-ffi/src/web.rs`). Reads the display list; restarts the core after a crash. |
+| `core-worker.js` | Runs `core.wasm` on a thread of its own, so reading a big drawing never freezes the page. |
+| `host.js` | Where the workbench is running: on the web, or inside the BlackCAD application (`apps/shell`). The interface's wording about itself, file dialogs, saving in place, printing and the window title go through it. |
 | `icons.js` | The tool and button icons, drawn as SVG paths for this project. |
 | `sw.js` | The service worker: caches the app so it works offline after one visit; the build stamps its cache name. |
 | `manifest.webmanifest` | Makes the app installable, and lets the installed app open `.dwg`, `.dxf` and `.cad` files from the file manager. |
@@ -26,7 +28,14 @@ Published from `main` at <https://cad.mosaiciron.com/> (see
 
 The page has no build step of its own and no dependencies: plain HTML, CSS
 and JavaScript modules, written for this project. `app.js` imports only
-`core.js` and `icons.js`.
+`core.js`, `host.js` and `icons.js`.
+
+Every call into the core is asynchronous, because the native engine in the
+BlackCAD application answers across a bridge. `app.js` never waits on the
+core to draw the screen: what the panels show about a drawing (its info,
+layouts, linetypes, blocks, the selected object) is read after each change;
+snap and hover ask once per frame and keep only the newest answer
+(`latestWins`); a command's answers are handed to it one at a time, in order.
 
 ## How the page talks to the core
 

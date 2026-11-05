@@ -8,7 +8,8 @@
 // draws the display list, routes input, and runs commands as generators
 // that ask for points, lengths and text the way a CAD command line does.
 
-import { Core, CoreCrash, opLength } from "./core.js";
+import { Core, CoreCrash, opLength, latestWins } from "./core.js";
+import { host, baseName, settleIntoApp } from "./host.js";
 import { icon } from "./icons.js";
 
 // ---------------------------------------------------------------- constants
@@ -72,6 +73,7 @@ let editingField = null; // the properties row being edited
 // ---------------------------------------------------------------- boot
 
 async function boot() {
+  settleIntoApp();
   buildChrome();
   bindInput();
   try {
@@ -82,11 +84,14 @@ async function boot() {
     document.querySelectorAll(".welcome-actions button").forEach((b) => (b.disabled = true));
     return;
   }
-  // The single file installs nothing, even when served beside the app.
-  if (!SINGLE_FILE && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  // The single file installs nothing, even when served beside the app;
+  // the BlackCAD application is already installed and works offline.
+  if (host.webOnly && !SINGLE_FILE && "serviceWorker" in navigator && location.protocol.startsWith("http")) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
-  if ("launchQueue" in window) {
+  // Files the app was opened with (a double-click in the file manager).
+  host.launchFiles((f) => openFile(f, null));
+  if (host.webOnly && "launchQueue" in window) {
     // Files opened with the installed app (manifest file_handlers).
     window.launchQueue.setConsumer(async (p) => {
       for (const h of p.files || []) await openFile(await h.getFile(), h);
@@ -283,6 +288,7 @@ function buildChrome() {
 
   let deferredInstall = null;
   addEventListener("beforeinstallprompt", (e) => {
+    if (!host.webOnly) return;
     e.preventDefault();
     deferredInstall = e;
     $("#install-btn").hidden = false;
@@ -341,7 +347,7 @@ function fileMenu() {
     ["Print…", "", () => startCommand("PRINT"), !has],
     ["Page setup…", "", () => startCommand("PAGESETUP"), !has],
     "-",
-    ...(has ? (core.query(doc.id, "layouts")?.layouts || []).map((l) => [`${l.current ? "● " : ""}${esc(l.name)}${l.paperName ? ` · ${esc(l.paperName)}` : ""}`, l.model ? "Model" : "Layout", () => switchSheet(l.name)]) : []),
+    ...(has ? (doc.layouts || []).map((l) => [`${l.current ? "● " : ""}${esc(l.name)}${l.paperName ? ` · ${esc(l.paperName)}` : ""}`, l.model ? "Model" : "Layout", () => switchSheet(l.name)]) : []),
     ["New layout…", "", () => startCommand("LAYOUT", (c) => layoutNew(c)), !has],
     "-",
     ["Close drawing", "Ctrl+W", () => closeDoc(doc), !has],
@@ -405,56 +411,75 @@ function unitMark() {
 
 // ---------------------------------------------------------------- drawings
 
-function newDrawing(imperial) {
-  if (!core) return;
+async function newDrawing(imperial) {
+  if (!core) return null;
   const n = docs.filter((d) => /^Drawing\d+/.test(d.name)).length + 1;
   let id;
   try {
-    id = core.newDrawing(imperial);
+    id = await core.newDrawing(imperial);
   } catch (e) {
-    return handleError(e);
+    handleError(e);
+    return null;
   }
-  addDoc({ id, name: `Drawing${n}.cad`, format: "cad", fileHandle: null, orig: null, imperial });
+  return addDoc({ id, name: `Drawing${n}.cad`, format: "cad", fileHandle: null, orig: null, imperial });
 }
 
-function openSample() {
+async function openSample() {
   if (!core) return;
   let id;
   try {
-    id = core.sample();
+    id = await core.sample();
   } catch (e) {
     return handleError(e);
   }
-  addDoc({ id, name: "P-1042 plate.cad", format: "cad", fileHandle: null, orig: null, sample: true });
+  await addDoc({ id, name: "P-1042 plate.cad", format: "cad", fileHandle: null, orig: null, sample: true });
 }
 
+/** `file`: a File, or {name, bytes} from the app's own open dialog. */
 async function openFile(file, handle) {
   if (!core) return;
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const bytes = file.bytes instanceof Uint8Array ? file.bytes : new Uint8Array(await file.arrayBuffer());
   let id;
   try {
-    id = core.open(bytes);
+    id = await core.open(bytes);
   } catch (e) {
     if (e instanceof CoreCrash) return crashed(e);
     toast(`${file.name}: ${e.message}`, true);
     return;
   }
   const ext = (file.name.split(".").pop() || "").toLowerCase();
-  addDoc({ id, name: file.name, format: ext === "dwg" || ext === "dxf" ? ext : "cad", fileHandle: handle, orig: bytes });
+  await addDoc({ id, name: file.name, format: ext === "dwg" || ext === "dxf" ? ext : "cad", fileHandle: handle, path: file.path || null, orig: bytes });
 }
 
-function addDoc(d) {
+/** Everything the panels show about a drawing that only the core knows:
+ *  read after each change, so drawing the screen never waits on the core. */
+async function loadDocState(d) {
+  const [info, layouts, linetypes, blocks] = await Promise.all([
+    core.info(d.id),
+    core.query(d.id, "layouts"),
+    core.query(d.id, "linetypes"),
+    core.query(d.id, "blocks"),
+  ]);
+  d.info = info;
+  d.layouts = layouts?.layouts || [];
+  d.linetypes = linetypes || null;
+  d.blocks = blocks?.blocks || [];
+}
+
+async function addDoc(d) {
   d.view = null;
   try {
-    d.disp = prepare(core.display(d.id));
-    d.info = core.info(d.id);
+    d.disp = prepare(await core.display(d.id));
+    await loadDocState(d);
   } catch (e) {
-    return handleError(e);
+    handleError(e);
+    return null;
   }
   docs.push(d);
   activate(d);
   zoomExtents();
   log(`${d.name}: ${d.info.summary.split("\n")[0]}`);
+  return d;
 }
 
 function activate(d) {
@@ -471,28 +496,37 @@ function activate(d) {
 function closeDoc(d) {
   if (!d) return;
   if (d.info.dirty && !confirm(`${d.name} has unsaved changes. Close it anyway?`)) return;
-  core.close(d.id);
+  core.close(d.id).catch(handleError);
   docs.splice(docs.indexOf(d), 1);
   activate(docs[docs.length - 1] || null);
 }
 
 /** Read the drawing again after it changed: only the entities that
- *  changed, when the core can say which (crates/cad-ffi/src/session.rs). */
+ *  changed, when the core can say which (crates/cad-ffi/src/session.rs).
+ *  Refreshes of one drawing run one after another, in order. */
 function refresh(d = doc) {
-  if (!d) return;
+  if (!d) return Promise.resolve();
+  d.refreshing = (d.refreshing || Promise.resolve()).then(() => refreshNow(d));
+  return d.refreshing;
+}
+
+async function refreshNow(d) {
+  if (!docs.includes(d)) return;
   try {
-    const p = core.displayChanges(d.id);
+    const p = await core.displayChanges(d.id);
     if (p.patch && d.disp) patchDisplay(d.disp, p);
     else d.disp = prepare(p);
-    d.info = core.info(d.id);
+    await loadDocState(d);
   } catch (e) {
     if (e instanceof CoreCrash) return crashed(e);
-    throw e;
+    logError(e.message || String(e));
+    return;
   }
   memoryCheck();
   if (d === doc) {
     for (const h of [...selection]) if (!d.disp.byHandle.has(h)) selection.delete(h);
-    updateGrips();
+    selObj = null;
+    await Promise.all([updateGrips(), loadSelected()]);
     renderAll();
   }
   needsDraw = true;
@@ -600,6 +634,7 @@ let memoryWarned = false;
 /** Warn once when the core holds a lot: past the core's own limit it
  *  refuses new drawings and edits (crates/cad-ffi/src/web.rs). */
 function memoryCheck() {
+  if (!core.bounded) return;
   const mb = core.liveBytes() / 2 ** 20;
   if (mb > Core.SOFT_LIMIT_MB * 0.75 && !memoryWarned) {
     memoryWarned = true;
@@ -639,11 +674,7 @@ function renderSheets() {
   if (!el) return;
   el.innerHTML = "";
   if (!doc) return;
-  let list = [];
-  try {
-    list = core.query(doc.id, "layouts")?.layouts || [];
-  } catch (_) {}
-  for (const sh of list) {
+  for (const sh of doc.layouts || []) {
     const b = document.createElement("button");
     b.className = "st" + (sh.current ? " on" : "");
     b.textContent = sh.name;
@@ -671,17 +702,19 @@ function switchSheet(name) {
 }
 
 /** [`switchSheet`] from inside a running command (LAYOUT). */
-function switchSheetNow(name) {
+async function switchSheetNow(name) {
+  const d = doc;
   try {
-    core.exec(doc.id, `space ${name}`);
+    await core.exec(d.id, `space ${name}`);
   } catch (e) {
     return handleError(e);
   }
   selection.clear();
-  doc.views = doc.views || {};
-  if (doc.view) doc.views[doc.sheet || "Model"] = doc.view;
-  doc.sheet = name;
-  refresh(doc);
+  d.views = d.views || {};
+  if (d.view) d.views[d.sheet || "Model"] = d.view;
+  d.sheet = name;
+  await refresh(d);
+  if (d !== doc) return;
   doc.view = doc.views[name] || null;
   if (!doc.view) zoomExtents();
   needsDraw = true;
@@ -699,8 +732,8 @@ function updateChrome() {
   $("#psub").textContent = i ? `${i.space || "Model"} · ${unitMark() || i.units} · ${i.dirty ? "Unsaved" : "Saved"}` : "";
   const u = user();
   $("#who-av").textContent = u ? u.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() : "·";
-  $("#who-text").textContent = u ? `${u} · this browser` : "Editing in this browser";
-  document.title = doc ? `${doc.name}${i.dirty ? " •" : ""} — ${APP_TITLE}` : APP_TITLE;
+  $("#who-text").textContent = u ? `${u} · ${host.place}` : host.editingOn;
+  host.setTitle(doc ? `${doc.name}${i.dirty ? " •" : ""} — ${APP_TITLE}` : APP_TITLE);
 }
 
 // ---------------------------------------------------------------- view
@@ -1283,6 +1316,11 @@ function currentPoint() {
 }
 
 let cursorQueued = false;
+/** Snap and hover for the cursor: one request per frame, and only the
+ *  newest answer is used, so a slow reply never lands on a cursor that has
+ *  moved on. The crosshairs follow the mouse at once; the snap marker and
+ *  the highlight follow as the core answers. */
+const cursorAsk = latestWins();
 function updateCursor() {
   if (cursorQueued) return;
   cursorQueued = true;
@@ -1290,25 +1328,41 @@ function updateCursor() {
     cursorQueued = false;
     if (!doc?.view || !core) return;
     [cursor.wx, cursor.wy] = toWorld(cursor.sx, cursor.sy);
+    const d = doc;
     const req = runner?.req;
     const r = aperturePx() / doc.view.scale;
-    cursor.snap = null;
-    cursor.snaps = [];
-    cursor.grip = null;
-    if ((req?.type === "point" && !req.pick) || req?.type === "distance" || req?.type === "angle") {
-      const kinds = req.forceSnap ?? (aids.osnap ? SNAP_DEFAULT : 0);
-      if (kinds) {
-        const res = core.query(doc.id, `snap ${cursor.wx} ${cursor.wy} ${r} ${kinds}`);
-        cursor.snaps = res?.snaps || [];
-        if (cursor.snaps.length) cursor.snap = cursor.snaps[cursor.snapIndex % cursor.snaps.length];
-      }
+    const wantSnap = (req?.type === "point" && !req.pick) || req?.type === "distance" || req?.type === "angle";
+    const kinds = wantSnap ? req.forceSnap ?? (aids.osnap ? SNAP_DEFAULT : 0) : 0;
+    const wantHover = (!req || req.type === "select" || req.pick) && !pointerMode;
+    const grip = wantHover && !req ? gripAt(cursor.sx, cursor.sy) : null;
+    const [wx, wy] = [cursor.wx, cursor.wy];
+    if (!kinds) {
+      cursor.snap = null;
+      cursor.snaps = [];
     }
-    if ((!req || req.type === "select" || req.pick) && !pointerMode) {
-      cursor.grip = !req ? gripAt(cursor.sx, cursor.sy) : null;
-      hover = cursor.grip ? null : core.query(doc.id, `pick ${cursor.wx} ${cursor.wy} ${r}`)?.handle ?? null;
-    } else hover = null;
+    cursor.grip = grip;
+    if (!wantHover || grip) hover = null;
     showCoords();
     needsDraw = true;
+    if (!kinds && (!wantHover || grip)) return cursorAsk.cancel();
+    cursorAsk(() =>
+      Promise.all([
+        kinds ? core.query(d.id, `snap ${wx} ${wy} ${r} ${kinds}`) : null,
+        wantHover && !grip ? core.query(d.id, `pick ${wx} ${wy} ${r}`) : null,
+      ])
+    )
+      .then((v) => {
+        if (v === latestWins.stale || d !== doc) return;
+        const [snap, pick] = v;
+        if (kinds) {
+          cursor.snaps = snap?.snaps || [];
+          cursor.snap = cursor.snaps.length ? cursor.snaps[cursor.snapIndex % cursor.snaps.length] : null;
+        }
+        if (wantHover && !grip) hover = pick?.handle ?? null;
+        showCoords();
+        needsDraw = true;
+      })
+      .catch(handleError);
   });
 }
 
@@ -1329,10 +1383,38 @@ function showCoords() {
   $("#ppos").textContent = t;
 }
 
-/** A length in the drawing's display format. */
+/** A length in the drawing's display format. The core formats it
+ *  (cad_core::units); answers are kept per drawing and format, so the
+ *  panels and the status bar never wait. A length the core has not
+ *  formatted yet shows in plain decimals for the moment it takes, and the
+ *  panels are drawn again when the answer comes. */
+const fmtCache = new Map();
+let fmtWaiting = null;
 function fmt(v) {
   if (!doc || !core) return String(v);
-  return core.query(doc.id, `fmt ${v}`)?.text[0] ?? (+v).toFixed(4);
+  const i = doc.info;
+  const key = `${doc.id}|${i?.insunits}|${i?.lunits}|${i?.luprec}|${i?.units}|${+v}`;
+  const hit = fmtCache.get(key);
+  if (hit !== undefined) return hit;
+  const d = doc;
+  if (fmtCache.size > 20000) fmtCache.clear();
+  fmtCache.set(key, (+v).toFixed(4).replace(/\.?0+$/, ""));
+  core
+    .query(d.id, `fmt ${v}`)
+    .then((r) => {
+      if (r?.text?.[0] === undefined) return;
+      fmtCache.set(key, r.text[0]);
+      if (d !== doc || fmtWaiting) return;
+      fmtWaiting = requestAnimationFrame(() => {
+        fmtWaiting = null;
+        showCoords();
+        renderProps();
+        renderSheet();
+        needsDraw = true;
+      });
+    })
+    .catch(handleError);
+  return fmtCache.get(key);
 }
 
 // ---------------------------------------------------------------- pointer input
@@ -1483,12 +1565,12 @@ function onMove(e) {
   updateCursor();
 }
 
-function hoverAt(sx, sy) {
+async function hoverAt(sx, sy) {
   const [x, y] = toWorld(sx, sy);
-  return core.query(doc.id, `pick ${x} ${y} ${aperturePx() / doc.view.scale}`)?.handle ?? null;
+  return (await core.query(doc.id, `pick ${x} ${y} ${aperturePx() / doc.view.scale}`))?.handle ?? null;
 }
 
-function onUp(e) {
+async function onUp(e) {
   pointers.delete(e.pointerId);
   const m = pointerMode;
   if (m?.kind === "pinch") {
@@ -1503,15 +1585,21 @@ function onUp(e) {
     [cursor.wx, cursor.wy] = toWorld(cursor.sx, cursor.sy);
     answerPoint(currentPoint());
   } else if (m.kind === "press") {
-    const h = hoverAt(m.x0, m.y0);
+    // The click's pick is answered after the click; anything that changed
+    // the selection meanwhile (Ctrl+A, another click) wins over it.
+    const gen = selectionGen;
+    const h = await hoverAt(m.x0, m.y0);
+    if (gen !== selectionGen) return;
     if (h) {
       if (m.shift && selection.has(h)) selection.delete(h);
       else selection.add(h);
     } else if (!m.shift) selection.clear();
     selectionChanged();
   } else if (m.kind === "box") {
+    const gen = selectionGen;
     const a = toWorld(m.x0, m.y0), b = toWorld(m.x1, m.y1);
-    const res = core.query(doc.id, `box ${a[0]} ${a[1]} ${b[0]} ${b[1]} ${m.x1 < m.x0 ? 1 : 0}`);
+    const res = await core.query(doc.id, `box ${a[0]} ${a[1]} ${b[0]} ${b[1]} ${m.x1 < m.x0 ? 1 : 0}`);
+    if (gen !== selectionGen) return;
     for (const h of res?.handles || []) m.shift ? selection.delete(h) : selection.add(h);
     selectionChanged();
   }
@@ -1519,8 +1607,45 @@ function onUp(e) {
   updateCursor();
 }
 
+/** The one selected object as the core describes it (`get`), read when
+ *  the selection or the drawing changes; the newest selection wins. */
+const selAsk = latestWins();
+let selObj = null;
+async function loadSelected() {
+  if (!doc || selection.size !== 1) {
+    selAsk.cancel();
+    selObj = null;
+    return;
+  }
+  const d = doc, h = [...selection][0];
+  if (selObj?.pending === `${d.id}|${h}`) return;
+  selObj = { pending: `${d.id}|${h}` };
+  let g;
+  try {
+    g = await selAsk(() => core.query(d.id, `get ${h}`));
+  } catch (e) {
+    selObj = null;
+    return handleError(e);
+  }
+  if (g === latestWins.stale) return;
+  selObj = { d, h, g };
+  if (d === doc) {
+    renderProps();
+    renderSheet();
+  }
+}
+/** The selected object, null when the core has none by that handle, or
+ *  undefined while it is still being read. */
+function selectedObject() {
+  const h = [...selection][0];
+  return selObj && selObj.d === doc && selObj.h === h ? selObj.g : undefined;
+}
+
+let selectionGen = 0;
 function selectionChanged() {
-  updateGrips();
+  selectionGen++;
+  updateGrips().then(() => (needsDraw = true));
+  selObj = null;
   renderProps();
   renderSheet();
   if (runner?.req?.type === "select") setPrompt();
@@ -1530,18 +1655,25 @@ function selectionChanged() {
 // ---------------------------------------------------------------- grips
 
 /** Grips on the selected objects' defining points (DESIGN.md §5), as the
- *  core lists them (cad_core::grips). */
-function updateGrips() {
-  grips = [];
-  if (!doc || selection.size > 40) return;
-  const hs = [...selection];
-  if (!hs.length) return;
-  let list = [];
-  try {
-    list = core.query(doc.id, `grips ${hs.join(" ")}`)?.grips || [];
-  } catch (_) {
+ *  core lists them (cad_core::grips). The newest selection wins. */
+const gripAsk = latestWins();
+async function updateGrips() {
+  if (!doc || selection.size > 40 || !selection.size) {
+    gripAsk.cancel();
+    grips = [];
     return;
   }
+  const hs = [...selection];
+  let list;
+  try {
+    list = await gripAsk(() => core.query(doc.id, `grips ${hs.join(" ")}`));
+  } catch (e) {
+    if (e instanceof CoreCrash) crashed(e);
+    return;
+  }
+  if (list === latestWins.stale) return;
+  list = list?.grips || [];
+  grips = [];
   // The rubber band while dragging pivots on the object's centre, or on
   // a line's other end.
   const at = (h, kind, field) => list.find((g) => g.handle === h && g.kind === kind && (!field || g.field === field));
@@ -1554,7 +1686,7 @@ function updateGrips() {
 
 /** Dragging a grip edits the object: one command, one undo step. */
 function startGrip(gr) {
-  startCommand("GRIP", function* (c) {
+  startCommand("GRIP", async function* (c) {
     const base = [gr.x, gr.y];
     const req = c.point("Specify stretch point", { base });
     const cen = gr.center;
@@ -1568,7 +1700,7 @@ function startGrip(gr) {
     } else if (gr.kind === "end" && gr.other) req.preview = (q) => [{ t: "line", a: gr.other, b: q }];
     else req.preview = (q) => [{ t: "line", a: base, b: q }];
     const q = yield req;
-    if (q) c.edit(`grip ${gr.handle} ${gr.kind} ${gr.field} ${P(base)} ${P(q)}`);
+    if (q) await c.edit(`grip ${gr.handle} ${gr.kind} ${gr.field} ${P(base)} ${P(q)}`);
   });
 }
 
@@ -1757,37 +1889,44 @@ function startCommand(name, gen = null) {
   if (c.needsDoc && !doc) return logError("Open or start a drawing first.");
   if (c.instant) {
     log(name, "ok");
-    try {
-      c.run();
-    } catch (e) {
-      handleError(e);
-    }
+    Promise.resolve()
+      .then(() => c.run())
+      .catch(handleError);
     return;
   }
   if (runner) cancelCommand(false);
   if (name !== "GRIP") log(`Command: ${name}`, "ok");
   if (c.repeat !== false) lastCommand = name;
-  runner = { name, gen: c.run(helpers()), req: null };
+  runner = { name, gen: c.run(helpers()), req: null, busy: Promise.resolve() };
   step(undefined);
 }
 
+/** Hand an answer to the running command. Answers are taken one at a time,
+ *  in order: a click that lands while the core is still working on the
+ *  last one waits its turn instead of being lost or reordered. */
 function step(answer) {
-  if (!runner) return;
+  if (!runner) return Promise.resolve();
   const r = runner;
+  r.busy = r.busy.then(() => stepNow(r, answer));
+  return r.busy;
+}
+
+async function stepNow(r, answer) {
+  if (runner !== r) return;
+  // Until the command asks again, nothing waits for a point.
+  r.req = null;
   let res;
   try {
-    res = r.gen.next(answer);
+    res = await r.gen.next(answer);
   } catch (e) {
-    runner = null;
+    if (runner === r) runner = null;
     handleError(e);
-    finishCommand();
-    return;
+    return finishCommand();
   }
   if (runner !== r) return;
   if (res.done) {
     runner = null;
-    finishCommand();
-    return;
+    return finishCommand();
   }
   r.req = res.value;
   cursor.snapIndex = 0;
@@ -1795,9 +1934,9 @@ function step(answer) {
   updateCursor();
 }
 
-function finishCommand() {
+async function finishCommand() {
   setPrompt();
-  if (doc) refresh(doc);
+  if (doc) await refresh(doc);
   needsDraw = true;
   updateCursor();
 }
@@ -1806,13 +1945,14 @@ function cancelCommand(announce) {
   if (!runner) return setPrompt();
   const r = runner;
   runner = null;
-  try {
-    r.gen.return();
-  } catch (e) {
-    handleError(e);
-  }
+  // The command's own clean-up (its `finally`, such as closing an undo
+  // group) runs after anything it was already doing.
+  r.busy = r.busy
+    .then(() => r.gen.return())
+    .catch(handleError)
+    .then(() => finishCommand());
   if (announce) log("*Cancel*");
-  finishCommand();
+  setPrompt();
 }
 
 function handleError(e) {
@@ -1836,14 +1976,15 @@ async function recover(e) {
   try {
     await core.restart();
   } catch (err) {
-    logError(`The core could not be restarted: ${err.message}. Reload the page.`);
+    logError(`The core could not be restarted: ${err.message}. ${host.restartHint}`);
     return;
   }
   for (const d of [...docs]) {
     try {
-      d.id = d.orig ? core.open(d.orig) : d.sample ? core.sample() : core.newDrawing(!!d.imperial);
-      d.disp = prepare(core.display(d.id));
-      d.info = core.info(d.id);
+      d.id = d.orig ? await core.open(d.orig) : d.sample ? await core.sample() : await core.newDrawing(!!d.imperial);
+      d.refreshing = null;
+      d.disp = prepare(await core.display(d.id));
+      await loadDocState(d);
     } catch (_) {
       docs.splice(docs.indexOf(d), 1);
     }
@@ -1863,8 +2004,11 @@ function answerPoint(p) {
 }
 
 /** Typed input at a prompt: options, snap keywords, points, lengths, text. */
-function answerText(text) {
-  const req = runner.req;
+async function answerText(text) {
+  const r = runner;
+  if (r) await r.busy;
+  if (runner !== r || !r?.req) return;
+  const req = r.req;
   const up = text.trim().toUpperCase();
   if (req.type === "text") return step(text.length ? text : null);
   if (!up) return step(null);
@@ -1884,30 +2028,30 @@ function answerText(text) {
   }
   if (req.type === "option") return logError(`Choose ${req.options.join(", ")}.`);
   if (req.type === "angle") {
-    const a = core.query(doc.id, `angle ${text}`);
+    const a = await core.query(doc.id, `angle ${text}`);
     return a ? step(a.value) : logError(`"${text}" is not an angle.`);
   }
   if (req.type === "distance") {
-    const v = length(text);
+    const v = await length(text);
     return v === null ? logError(`"${text}" is not a length.`) : step(v);
   }
-  const p = parsePoint(text, req);
+  const p = await parsePoint(text, req);
   if (p === undefined) return;
   if (!p) return logError(`"${text}" is not a point. Type x,y or @dx,dy or @length<angle, or a length along the cursor.`);
   step(p);
 }
 
-function length(t) {
-  const r = core.query(doc.id, `len ${t}`);
+async function length(t) {
+  const r = await core.query(doc.id, `len ${t}`);
   return r ? r.value : null;
 }
 
 /** COMMANDS.md §17: x,y · @dx,dy · @len<angle · <angle · a length along the cursor. */
-function parsePoint(text, req) {
+async function parsePoint(text, req) {
   const t = text.trim();
   const base = req.base || null;
   if (t.startsWith("<")) {
-    const a = core.query(doc.id, `angle ${t.slice(1)}`);
+    const a = await core.query(doc.id, `angle ${t.slice(1)}`);
     if (!a) return null;
     req.angleLock = a.value;
     log(`Angle locked at ${t.slice(1)}°`);
@@ -1919,20 +2063,20 @@ function parsePoint(text, req) {
   if (rel && !base) return null;
   const polar = body.split("<");
   if (polar.length === 2) {
-    const d = length(polar[0]);
-    const a = core.query(doc.id, `angle ${polar[1]}`);
+    const d = await length(polar[0]);
+    const a = await core.query(doc.id, `angle ${polar[1]}`);
     if (d === null || !a) return null;
     const o = rel ? base : [0, 0];
     return [o[0] + d * Math.cos(a.value), o[1] + d * Math.sin(a.value)];
   }
   const parts = body.split(",");
   if (parts.length === 2) {
-    const x = length(parts[0]), y = length(parts[1]);
+    const x = await length(parts[0]), y = await length(parts[1]);
     if (x === null || y === null) return null;
     return rel ? [base[0] + x, base[1] + y] : [x, y];
   }
   if (parts.length === 1 && base) {
-    const d = length(body);
+    const d = await length(body);
     if (d === null) return null;
     const p = currentPoint();
     const dx = p[0] - base[0], dy = p[1] - base[1];
@@ -1944,7 +2088,8 @@ function parsePoint(text, req) {
 }
 
 function helpers() {
-  const exec = (line) => core.exec(doc.id, line);
+  const d = doc;
+  const exec = (line) => core.exec(d.id, line);
   return {
     point: (prompt, o = {}) => ({ type: "point", prompt, ...o }),
     distance: (prompt, o = {}) => ({ type: "distance", prompt, ...o }),
@@ -1953,11 +2098,12 @@ function helpers() {
     option: (prompt, options, o = {}) => ({ type: "option", prompt, options, ...o }),
     select: (prompt = "Select objects") => ({ type: "select", prompt, options: [] }),
     exec,
-    /** An edit; on failure the message is shown and null returned. */
-    edit: (line) => {
+    /** An edit; on failure the message is shown and null returned. The
+     *  drawing on screen is read again before the command goes on. */
+    edit: async (line) => {
       try {
-        const r = exec(line);
-        refresh(doc);
+        const r = await exec(line);
+        await refresh(d);
         return r;
       } catch (e) {
         if (e instanceof CoreCrash) throw e;
@@ -1975,17 +2121,17 @@ const P = (p) => `${N(p[0])} ${N(p[1])}`;
 const deg = (r) => N((r * 180) / Math.PI);
 
 /** The selection, or ask for one. */
-function* selected(c) {
+async function* selected(c) {
   if (!selection.size) {
     for (;;) if ((yield c.select()) === null) break;
   }
   return [...selection];
 }
 
-function* cmdLine(c) {
+async function* cmdLine(c) {
   const first = yield c.point("Specify first point");
   if (!first) return;
-  c.exec("begin");
+  await c.exec("begin");
   try {
     const pts = [first];
     const made = [];
@@ -1995,27 +2141,27 @@ function* cmdLine(c) {
       if (r === null) break;
       if (r.option === "Undo") {
         if (made.length) {
-          c.edit(`erase ${made.pop()}`);
+          await c.edit(`erase ${made.pop()}`);
           pts.pop();
         }
         continue;
       }
       if (r.option === "Close") {
-        c.edit(`line ${P(last)} ${P(pts[0])}`);
+        await c.edit(`line ${P(last)} ${P(pts[0])}`);
         break;
       }
-      const res = c.edit(`line ${P(last)} ${P(r)}`);
+      const res = await c.edit(`line ${P(last)} ${P(r)}`);
       if (res) {
         made.push(res.handles[0]);
         pts.push(r);
       }
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
   }
 }
 
-function* cmdPline(c) {
+async function* cmdPline(c) {
   const first = yield c.point("Specify start point");
   if (!first) return;
   const pts = [first];
@@ -2035,10 +2181,10 @@ function* cmdPline(c) {
     pts.push(r);
   }
   if (pts.length < 2) return;
-  c.edit(`pline ${closed ? 1 : 0} ${pts.map((p) => `${P(p)} 0`).join(" ")}`);
+  await c.edit(`pline ${closed ? 1 : 0} ${pts.map((p) => `${P(p)} 0`).join(" ")}`);
 }
 
-function* cmdCircle(c) {
+async function* cmdCircle(c) {
   const center = yield c.point("Specify center point");
   if (!center) return;
   let diameter = false;
@@ -2056,7 +2202,7 @@ function* cmdCircle(c) {
       diameter = r.option === "Diameter";
       continue;
     }
-    c.edit(`circle ${P(center)} ${N(diameter ? r / 2 : r)}`);
+    await c.edit(`circle ${P(center)} ${N(diameter ? r / 2 : r)}`);
     return;
   }
 }
@@ -2076,7 +2222,7 @@ function arc3(a, b, p) {
   return { c: [ux, uy], r, a0, a1: a1 < a0 ? a1 + TAU : a1 };
 }
 
-function* cmdArc(c) {
+async function* cmdArc(c) {
   const a = yield c.point("Specify start point");
   if (!a) return;
   const b = yield c.point("Specify second point", { base: a, preview: (q) => [{ t: "line", a, b: q }] });
@@ -2088,17 +2234,17 @@ function* cmdArc(c) {
       return arc ? [{ t: "arc", ...arc }] : [{ t: "poly", pts: [a, b, q] }];
     },
   });
-  if (p) c.edit(`arc-3p ${P(a)} ${P(b)} ${P(p)}`);
+  if (p) await c.edit(`arc-3p ${P(a)} ${P(b)} ${P(p)}`);
 }
 
-function* cmdRect(c) {
+async function* cmdRect(c) {
   const a = yield c.point("Specify first corner");
   if (!a) return;
   const b = yield c.point("Specify other corner", { base: a, preview: (q) => [{ t: "poly", pts: [a, [q[0], a[1]], q, [a[0], q[1]]], closed: true }] });
-  if (b) c.edit(`rect ${P(a)} ${P(b)}`);
+  if (b) await c.edit(`rect ${P(a)} ${P(b)}`);
 }
 
-function* cmdText(c) {
+async function* cmdText(c) {
   const at = yield c.point("Specify start point");
   if (!at) return;
   const defH = textHeight();
@@ -2107,7 +2253,7 @@ function* cmdText(c) {
   let rot = yield c.angle("Specify rotation angle", { base: at, def: "0" });
   if (rot === null) rot = 0;
   const words = yield c.text("Enter text");
-  if (words) c.edit(`text ${P(at)} ${N(h)} ${deg(rot)} ${words}`);
+  if (words) await c.edit(`text ${P(at)} ${N(h)} ${deg(rot)} ${words}`);
 }
 
 function ghostReq(c, prompt, base, hs, make) {
@@ -2119,34 +2265,34 @@ function ghostReq(c, prompt, base, hs, make) {
   return req;
 }
 
-function* cmdMove(c) {
+async function* cmdMove(c) {
   const hs = yield* selected(c);
   if (!hs.length) return;
   const base = yield c.point("Specify base point");
   if (!base) return;
   const to = yield ghostReq(c, "Specify second point", base, hs, (q) => xfMove(q[0] - base[0], q[1] - base[1]));
-  if (to && c.edit(`move ${N(to[0] - base[0])} ${N(to[1] - base[1])} ${hs.join(" ")}`)) selection.clear();
+  if (to && await c.edit(`move ${N(to[0] - base[0])} ${N(to[1] - base[1])} ${hs.join(" ")}`)) selection.clear();
 }
 
-function* cmdCopy(c) {
+async function* cmdCopy(c) {
   const hs = yield* selected(c);
   if (!hs.length) return;
   const base = yield c.point("Specify base point");
   if (!base) return;
-  c.exec("begin");
+  await c.exec("begin");
   try {
     for (;;) {
       const to = yield ghostReq(c, "Specify second point", base, hs, (q) => xfMove(q[0] - base[0], q[1] - base[1]));
       if (!to) break;
-      c.edit(`copy ${N(to[0] - base[0])} ${N(to[1] - base[1])} ${hs.join(" ")}`);
+      await c.edit(`copy ${N(to[0] - base[0])} ${N(to[1] - base[1])} ${hs.join(" ")}`);
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
     selection.clear();
   }
 }
 
-function* cmdRotate(c) {
+async function* cmdRotate(c) {
   const hs = yield* selected(c);
   if (!hs.length) return;
   const base = yield c.point("Specify base point");
@@ -2157,10 +2303,10 @@ function* cmdRotate(c) {
     return [{ t: "line", a: base, b: q }];
   };
   const a = yield req;
-  if (a !== null && c.edit(`rotate ${P(base)} ${deg(a)} ${hs.join(" ")}`)) selection.clear();
+  if (a !== null && await c.edit(`rotate ${P(base)} ${deg(a)} ${hs.join(" ")}`)) selection.clear();
 }
 
-function* cmdMirror(c) {
+async function* cmdMirror(c) {
   const hs = yield* selected(c);
   if (!hs.length) return;
   const a = yield c.point("Specify first point of mirror line");
@@ -2174,23 +2320,23 @@ function* cmdMirror(c) {
   if (!b) return;
   const r = yield c.option("Erase source objects?", ["Yes", "No"], { def: "No" });
   const keep = !(r && r.option === "Yes");
-  if (c.edit(`mirror ${P(a)} ${P(b)} ${keep ? 1 : 0} ${hs.join(" ")}`)) selection.clear();
+  if (await c.edit(`mirror ${P(a)} ${P(b)} ${keep ? 1 : 0} ${hs.join(" ")}`)) selection.clear();
 }
 
-function* cmdErase(c) {
+async function* cmdErase(c) {
   const hs = yield* selected(c);
   if (!hs.length) return;
-  if (c.edit(`erase ${hs.join(" ")}`)) {
+  if (await c.edit(`erase ${hs.join(" ")}`)) {
     selection.clear();
     c.log(`${hs.length} erased`);
   }
 }
 
 /** The circle or arc under a picked point, if any. */
-function circleAt(p) {
+async function circleAt(p) {
   const r = aperturePx() / doc.view.scale;
-  const h = core.query(doc.id, `pick ${p[0]} ${p[1]} ${r}`)?.handle;
-  const g = h && core.query(doc.id, `get ${h}`);
+  const h = (await core.query(doc.id, `pick ${p[0]} ${p[1]} ${r}`))?.handle;
+  const g = h && await core.query(doc.id, `get ${h}`);
   return g && (g.type === "CIRCLE" || g.type === "ARC") ? g : null;
 }
 
@@ -2219,10 +2365,10 @@ function linearDir(p1, p2, loc) {
 }
 
 /** Smart DIM: a circle or arc gives a diameter or radius, two points a linear dimension. */
-function* cmdDim(c, mode = "smart") {
+async function* cmdDim(c, mode = "smart") {
   const first = yield c.point(mode === "radius" || mode === "diameter" ? "Select arc or circle" : "Specify first point or select a circle");
   if (!first) return;
-  const circ = mode === "linear" || mode === "aligned" ? null : first.snap && first.snap !== 32 ? null : circleAt(first);
+  const circ = mode === "linear" || mode === "aligned" ? null : first.snap && first.snap !== 32 ? null : await circleAt(first);
   if (circ || mode === "radius" || mode === "diameter") {
     if (!circ) return c.log("That is not an arc or a circle.");
     const cen = circ.center;
@@ -2237,7 +2383,7 @@ function* cmdDim(c, mode = "smart") {
       },
     });
     if (!loc) return;
-    const r = c.edit(`dim-${radius ? "radius" : "diameter"} ${circ.handle} ${P(loc)}`);
+    const r = await c.edit(`dim-${radius ? "radius" : "diameter"} ${circ.handle} ${P(loc)}`);
     if (r) doc.lastDim = r.handles[0];
     return;
   }
@@ -2255,28 +2401,28 @@ function* cmdDim(c, mode = "smart") {
       aligned = loc.option === "Aligned";
       continue;
     }
-    const r = c.edit(`dim-${aligned ? "aligned" : "linear"} ${P(first)} ${P(second)} ${P(loc)}`);
+    const r = await c.edit(`dim-${aligned ? "aligned" : "linear"} ${P(first)} ${P(second)} ${P(loc)}`);
     if (r) doc.lastDim = r.handles[0];
     return;
   }
 }
 
-function* cmdDist(c) {
+async function* cmdDist(c) {
   const a = yield c.point("Specify first point");
   if (!a) return;
   const b = yield c.point("Specify second point", { base: a, preview: (q) => [{ t: "line", a, b: q }] });
   if (!b) return;
-  const msg = core.query(doc.id, `measure ${P(a)} ${P(b)}`).text;
+  const msg = (await core.query(doc.id, `measure ${P(a)} ${P(b)}`))?.text ?? "";
   c.log(msg);
   if (PHONE.matches) toast(msg);
 }
 
-function* cmdId(c) {
+async function* cmdId(c) {
   const p = yield c.point("Specify point");
   if (p) c.log(`X = ${fmt(p[0])}   Y = ${fmt(p[1])}`);
 }
 
-function* cmdZoom(c) {
+async function* cmdZoom(c) {
   const r = yield c.option("Specify an option", ["Extents", "Window", "In", "Out"], { def: "Extents" });
   if (r === null || r.option === "Extents") return zoomExtents();
   if (r.option === "In") return zoomBy(2);
@@ -2287,11 +2433,11 @@ function* cmdZoom(c) {
   if (b) zoomWindow(a, b);
 }
 
-function* cmdPan(c) {
+async function* cmdPan(c) {
   yield c.option("Drag to pan; Esc or Enter to exit", []);
 }
 
-function* cmdSavedBy(c) {
+async function* cmdSavedBy(c) {
   const name = yield c.text('Your name, recorded as "last saved by"', { def: user() || "none" });
   if (name === null) return;
   try {
@@ -2312,17 +2458,17 @@ function pickReq(c, prompt, o = {}) {
 }
 
 /** The object at a picked point, if any. */
-function objectAt(p) {
+async function objectAt(p) {
   const r = aperturePx() / doc.view.scale;
-  return core.query(doc.id, `pick ${p[0]} ${p[1]} ${r}`)?.handle ?? null;
+  return (await core.query(doc.id, `pick ${p[0]} ${p[1]} ${r}`))?.handle ?? null;
 }
 
-function getObj(h) {
-  return h ? core.query(doc.id, `get ${h}`) : null;
+async function getObj(h) {
+  return h ? await core.query(doc.id, `get ${h}`) : null;
 }
 
 /** A whole number typed at a prompt, or the default. */
-function* askInt(c, prompt, def, min = 1) {
+async function* askInt(c, prompt, def, min = 1) {
   for (;;) {
     const t = yield c.text(prompt, { def: String(def) });
     if (t === null || !t.trim()) return def;
@@ -2333,7 +2479,7 @@ function* askInt(c, prompt, def, min = 1) {
 }
 
 /** A plain number typed at a prompt (a scale factor), or the default. */
-function* askNumber(c, prompt, def, o = {}) {
+async function* askNumber(c, prompt, def, o = {}) {
   for (;;) {
     const r = yield c.distance(prompt, { def: String(def), ...o });
     if (r === null) return def;
@@ -2349,7 +2495,7 @@ function xfScale(cx, cy, k) {
 
 const setting = (key, def) => (doc[key] === undefined ? def : doc[key]);
 
-function* cmdOffset(c) {
+async function* cmdOffset(c) {
   let through = setting("offsetThrough", false);
   let dist = setting("offsetDist", null);
   const r = yield c.distance("Specify offset distance", { options: ["Through"], def: through || dist === null ? "Through" : fmt(dist) });
@@ -2362,31 +2508,31 @@ function* cmdOffset(c) {
   }
   if (!through && !(dist > 0)) return c.log("The offset distance must be more than zero.");
   Object.assign(doc, { offsetThrough: through, offsetDist: dist });
-  c.exec("begin");
+  await c.exec("begin");
   try {
     for (;;) {
       const p = yield pickReq(c, "Select object to offset", { options: ["Exit"] });
       if (!p || p.option) break;
-      const h = objectAt(p);
+      const h = await objectAt(p);
       if (!h) {
         c.log("No object there.");
         continue;
       }
       const side = yield c.point(through ? "Specify through point" : "Specify point on side to offset", { base: p });
       if (!side) break;
-      c.edit(through ? `offset-through ${P(side)} ${h}` : `offset ${N(dist)} ${P(side)} ${h}`);
+      await c.edit(through ? `offset-through ${P(side)} ${h}` : `offset ${N(dist)} ${P(side)} ${h}`);
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
   }
 }
 
 /** TRIM and EXTEND: every visible object is an edge (quick mode), or the
  *  edges chosen with the Edges option. */
-function* cmdTrimExtend(c, extend) {
+async function* cmdTrimExtend(c, extend) {
   let edges = [];
   const verb = extend ? "extend" : "trim";
-  c.exec("begin");
+  await c.exec("begin");
   try {
     for (;;) {
       const p = yield pickReq(c, `Select object to ${verb}${edges.length ? ` (${edges.length} edges)` : ", all objects are edges"}`, { options: ["Edges"] });
@@ -2400,19 +2546,19 @@ function* cmdTrimExtend(c, extend) {
         selectionChanged();
         continue;
       }
-      const h = objectAt(p);
+      const h = await objectAt(p);
       if (!h) {
         c.log("No object there.");
         continue;
       }
-      c.edit(`${verb} ${P(p)} ${h} ${edges.join(" ")}`);
+      await c.edit(`${verb} ${P(p)} ${h} ${edges.join(" ")}`);
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
   }
 }
 
-function* cmdFillet(c, chamfer) {
+async function* cmdFillet(c, chamfer) {
   let r = setting("filletRadius", 0);
   let d = setting("chamferDist", [0, 0]);
   const what = () => (chamfer ? `distances ${fmt(d[0])}, ${fmt(d[1])}` : `radius ${fmt(r)}`);
@@ -2433,12 +2579,12 @@ function* cmdFillet(c, chamfer) {
     }
     if (p1.option === "Polyline") {
       const q = yield pickReq(c, "Select polyline");
-      const h = q && objectAt(q);
+      const h = q && await objectAt(q);
       if (!h) return c.log("No polyline there.");
-      if (c.edit(chamfer ? `chamfer-pline ${N(d[0])} ${N(d[1])} ${h}` : `fillet-pline ${N(r)} ${h}`)) c.log("Corners done.");
+      if (await c.edit(chamfer ? `chamfer-pline ${N(d[0])} ${N(d[1])} ${h}` : `fillet-pline ${N(r)} ${h}`)) c.log("Corners done.");
       return;
     }
-    const h1 = objectAt(p1);
+    const h1 = await objectAt(p1);
     if (!h1) {
       c.log("No object there.");
       continue;
@@ -2450,14 +2596,14 @@ function* cmdFillet(c, chamfer) {
     selection.clear();
     selectionChanged();
     if (!p2) return;
-    const h2 = objectAt(p2);
+    const h2 = await objectAt(p2);
     if (!h2) return c.log("No object there.");
-    c.edit(chamfer ? `chamfer ${N(d[0])} ${N(d[1])} ${P(p1)} ${h1} ${P(p2)} ${h2}` : `fillet ${N(r)} ${P(p1)} ${h1} ${P(p2)} ${h2}`);
+    await c.edit(chamfer ? `chamfer ${N(d[0])} ${N(d[1])} ${P(p1)} ${h1} ${P(p2)} ${h2}` : `fillet ${N(r)} ${P(p1)} ${h1} ${P(p2)} ${h2}`);
     return;
   }
 }
 
-function* cmdArray(c, kind = null) {
+async function* cmdArray(c, kind = null) {
   const hs = yield* selected(c);
   if (!hs.length) return;
   if (!kind) {
@@ -2468,7 +2614,7 @@ function* cmdArray(c, kind = null) {
     const rows = yield* askInt(c, "Enter number of rows", 3);
     const cols = yield* askInt(c, "Enter number of columns", 4);
     // The core offers spacing that clears the selection.
-    let { rowGap, columnGap: colGap } = core.query(doc.id, `bounds ${hs.join(" ")}`);
+    let { rowGap, columnGap: colGap } = (await core.query(doc.id, `bounds ${hs.join(" ")}`)) || { rowGap: 0, columnGap: 0 };
     if (rows > 1) {
       const v = yield c.distance("Specify the distance between rows", { def: fmt(rowGap) });
       if (v !== null) rowGap = v;
@@ -2477,7 +2623,7 @@ function* cmdArray(c, kind = null) {
       const v = yield c.distance("Specify the distance between columns", { def: fmt(colGap) });
       if (v !== null) colGap = v;
     }
-    if (c.edit(`array-rect ${rows} ${cols} ${N(rowGap)} ${N(colGap)} ${hs.join(" ")}`)) selection.clear();
+    if (await c.edit(`array-rect ${rows} ${cols} ${N(rowGap)} ${N(colGap)} ${hs.join(" ")}`)) selection.clear();
     return;
   }
   const center = yield c.point("Specify center point of array");
@@ -2489,10 +2635,10 @@ function* cmdArray(c, kind = null) {
   if (fill === 0) fill = 360;
   const r = yield c.option("Rotate arrayed items?", ["Yes", "No"], { def: "Yes" });
   const rotate = !(r && r.option === "No");
-  if (c.edit(`array-polar ${P(center)} ${count} ${N(fill)} ${rotate ? 1 : 0} ${hs.join(" ")}`)) selection.clear();
+  if (await c.edit(`array-polar ${P(center)} ${count} ${N(fill)} ${rotate ? 1 : 0} ${hs.join(" ")}`)) selection.clear();
 }
 
-function* cmdScale(c) {
+async function* cmdScale(c) {
   const hs = yield* selected(c);
   if (!hs.length) return;
   const base = yield c.point("Specify base point");
@@ -2511,21 +2657,21 @@ function* cmdScale(c) {
       if (ref === null) return;
       const nl = yield c.distance("Specify new length", { base });
       if (nl === null) return;
-      if (c.edit(`scale-ref ${P(base)} ${N(ref)} ${N(nl)} ${hs.join(" ")}`)) selection.clear();
+      if (await c.edit(`scale-ref ${P(base)} ${N(ref)} ${N(nl)} ${hs.join(" ")}`)) selection.clear();
       return;
     }
-    if (c.edit(`scale ${P(base)} ${N(k)} ${hs.join(" ")}`)) selection.clear();
+    if (await c.edit(`scale ${P(base)} ${N(k)} ${hs.join(" ")}`)) selection.clear();
     return;
   }
 }
 
-function* cmdStretch(c) {
+async function* cmdStretch(c) {
   c.log("Select the objects to stretch with a crossing window: what is inside moves, what crosses it stretches.");
   const a = yield c.point("Specify first corner of crossing window");
   if (!a) return;
   const b = yield c.point("Specify opposite corner", { base: a, preview: (q) => [{ t: "poly", pts: [a, [q[0], a[1]], q, [a[0], q[1]]], closed: true }] });
   if (!b) return;
-  const hs = core.query(doc.id, `box ${a[0]} ${a[1]} ${b[0]} ${b[1]} 1`)?.handles || [];
+  const hs = (await core.query(doc.id, `box ${a[0]} ${a[1]} ${b[0]} ${b[1]} 1`))?.handles || [];
   if (!hs.length) return c.log("Nothing crosses that window.");
   hs.forEach((h) => selection.add(h));
   selectionChanged();
@@ -2534,32 +2680,32 @@ function* cmdStretch(c) {
   const to = yield c.point("Specify second point", { base, preview: (q) => [{ t: "line", a: base, b: q }] });
   selection.clear();
   selectionChanged();
-  if (to) c.edit(`stretch ${P(a)} ${P(b)} ${N(to[0] - base[0])} ${N(to[1] - base[1])} ${hs.join(" ")}`);
+  if (to) await c.edit(`stretch ${P(a)} ${P(b)} ${N(to[0] - base[0])} ${N(to[1] - base[1])} ${hs.join(" ")}`);
 }
 
-function* cmdExplode(c) {
+async function* cmdExplode(c) {
   const hs = yield* selected(c);
   if (!hs.length) return;
-  const r = c.edit(`explode ${hs.join(" ")}`);
+  const r = await c.edit(`explode ${hs.join(" ")}`);
   if (r) {
     selection.clear();
     c.log(`${r.handles.length} objects`);
   }
 }
 
-function* cmdXline(c, ray) {
+async function* cmdXline(c, ray) {
   if (ray) {
     const a = yield c.point("Specify start point");
     if (!a) return;
-    c.exec("begin");
+    await c.exec("begin");
     try {
       for (;;) {
         const b = yield c.point("Specify through point", { base: a, preview: (q) => [{ t: "line", a, b: [a[0] + (q[0] - a[0]) * 50, a[1] + (q[1] - a[1]) * 50] }] });
         if (!b) break;
-        c.edit(`ray ${P(a)} ${P(b)}`);
+        await c.edit(`ray ${P(a)} ${P(b)}`);
       }
     } finally {
-      c.exec("end");
+      await c.exec("end");
     }
     return;
   }
@@ -2572,38 +2718,38 @@ function* cmdXline(c, ray) {
     angle = t === null ? 0 : t;
     mode = "Ang";
   }
-  c.exec("begin");
+  await c.exec("begin");
   try {
     const long = (p, u) => [{ t: "line", a: [p[0] - u[0] * 1e4, p[1] - u[1] * 1e4], b: [p[0] + u[0] * 1e4, p[1] + u[1] * 1e4] }];
     for (;;) {
       if (mode === "point") {
         const b = yield c.point("Specify through point", { base: a, preview: (q) => { const L = Math.hypot(q[0] - a[0], q[1] - a[1]) || 1; return long(a, [(q[0] - a[0]) / L, (q[1] - a[1]) / L]); } });
         if (!b) break;
-        c.edit(`xline ${P(a)} ${P(b)}`);
+        await c.edit(`xline ${P(a)} ${P(b)}`);
       } else {
         const a = mode === "Hor" ? 0 : mode === "Ver" ? Math.PI / 2 : angle;
         const u = [Math.cos(a), Math.sin(a)];
         const p = yield c.point("Specify through point", { preview: (q) => long(q, u) });
         if (!p) break;
-        c.edit(`xline-angle ${P(p)} ${deg(a)}`);
+        await c.edit(`xline-angle ${P(p)} ${deg(a)}`);
       }
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
   }
 }
 
-function* cmdHatch(c) {
+async function* cmdHatch(c) {
   let pattern = setting("hatchPattern", "ANSI31");
   let scale = setting("hatchScale", 1);
   let angle = setting("hatchAngle", 0);
-  c.exec("begin");
+  await c.exec("begin");
   try {
     for (;;) {
       const p = yield pickReq(c, `Pick a point inside the area (${pattern}${pattern === "SOLID" ? "" : `, scale ${+scale.toPrecision(6)}, ${deg(angle)}°`})`, { options: ["Pattern", "Scale", "Angle", "Select objects"] });
       if (!p) break;
       if (p.option === "Pattern") {
-        const names = (core.query(doc.id, "patterns")?.patterns || []).map((x) => x.name);
+        const names = ((await core.query(doc.id, "patterns"))?.patterns || []).map((x) => x.name);
         c.log(`Patterns: ${names.join(", ")}`);
         const t = yield c.text("Enter a pattern name", { def: pattern });
         if (t && t.trim()) {
@@ -2630,13 +2776,13 @@ function* cmdHatch(c) {
         const hs = [...selection];
         selection.clear();
         selectionChanged();
-        if (hs.length) c.edit(`hatch-objects ${pattern} ${N(scale)} ${deg(angle)} 0 ${hs.join(" ")}`);
+        if (hs.length) await c.edit(`hatch-objects ${pattern} ${N(scale)} ${deg(angle)} 0 ${hs.join(" ")}`);
         continue;
       }
-      c.edit(`hatch ${pattern} ${N(scale)} ${deg(angle)} 0 ${P(p)}`);
+      await c.edit(`hatch ${pattern} ${N(scale)} ${deg(angle)} 0 ${P(p)}`);
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
   }
 }
 
@@ -2645,7 +2791,7 @@ function textHeight() {
 }
 
 /** Lines of text: each Enter adds a line, an empty one finishes. */
-function* askLines(c, prompt) {
+async function* askLines(c, prompt) {
   const lines = [];
   for (;;) {
     const t = yield c.text(lines.length ? "Enter the next line, or Enter to finish" : prompt);
@@ -2655,7 +2801,7 @@ function* askLines(c, prompt) {
   return lines;
 }
 
-function* cmdMtext(c) {
+async function* cmdMtext(c) {
   const a = yield c.point("Specify first corner");
   if (!a) return;
   const b = yield c.point("Specify opposite corner", { base: a, options: ["Height"], preview: (q) => [{ t: "poly", pts: [a, [q[0], a[1]], q, [a[0], q[1]]], closed: true }] });
@@ -2670,10 +2816,10 @@ function* cmdMtext(c) {
   }
   const lines = yield* askLines(c, "Enter text");
   if (!lines.length) return;
-  c.edit(`mtext-box ${P(a)} ${P(corner)} ${N(h)} 0 ${lines.join("\\P")}`);
+  await c.edit(`mtext-box ${P(a)} ${P(corner)} ${N(h)} 0 ${lines.join("\\P")}`);
 }
 
-function* cmdLeader(c, two = false) {
+async function* cmdLeader(c, two = false) {
   const first = yield c.point(two ? "Specify leader arrowhead location" : "Specify leader start point");
   if (!first) return;
   const pts = [first];
@@ -2687,10 +2833,10 @@ function* cmdLeader(c, two = false) {
   if (pts.length < 2) return;
   const lines = yield* askLines(c, "Enter the note");
   if (!lines.length) return;
-  c.edit(`leader ${N(textHeight())} ${pts.map(P).join(" ")} | ${lines.join("\\P")}`);
+  await c.edit(`leader ${N(textHeight())} ${pts.map(P).join(" ")} | ${lines.join("\\P")}`);
 }
 
-function* cmdDimAngular(c) {
+async function* cmdDimAngular(c) {
   const first = yield pickReq(c, "Select arc, circle or line, or Enter to specify a vertex");
   const arcPreview = (cen, a0, a1) => (q) => {
     const r = Math.hypot(q[0] - cen[0], q[1] - cen[1]);
@@ -2708,15 +2854,15 @@ function* cmdDimAngular(c) {
     if (!p2) return;
     const a0 = Math.atan2(p1[1] - v[1], p1[0] - v[0]), a1 = Math.atan2(p2[1] - v[1], p2[0] - v[0]);
     const loc = yield c.point("Specify dimension arc line location", { base: v, preview: arcPreview(v, a0, a1) });
-    if (loc) done(c.edit(`dim-angular ${P(v)} ${P(p1)} ${P(p2)} ${P(loc)}`));
+    if (loc) done(await c.edit(`dim-angular ${P(v)} ${P(p1)} ${P(p2)} ${P(loc)}`));
     return;
   }
-  const h = objectAt(first);
-  const g = getObj(h);
+  const h = await objectAt(first);
+  const g = await getObj(h);
   if (!g) return c.log("No object there.");
   if (g.type === "ARC") {
     const loc = yield c.point("Specify dimension arc line location", { base: g.center, preview: arcPreview(g.center, (g.start * Math.PI) / 180, (g.end * Math.PI) / 180) });
-    if (loc) done(c.edit(`dim-angular-arc ${h} ${P(loc)}`));
+    if (loc) done(await c.edit(`dim-angular-arc ${h} ${P(loc)}`));
     return;
   }
   if (g.type === "CIRCLE") {
@@ -2724,54 +2870,54 @@ function* cmdDimAngular(c) {
     if (!p2) return;
     const a0 = Math.atan2(first[1] - g.center[1], first[0] - g.center[0]), a1 = Math.atan2(p2[1] - g.center[1], p2[0] - g.center[0]);
     const loc = yield c.point("Specify dimension arc line location", { base: g.center, preview: arcPreview(g.center, a0, a1) });
-    if (loc) done(c.edit(`dim-angular ${P(g.center)} ${P(first)} ${P(p2)} ${P(loc)}`));
+    if (loc) done(await c.edit(`dim-angular ${P(g.center)} ${P(first)} ${P(p2)} ${P(loc)}`));
     return;
   }
   if (g.type !== "LINE") return c.log("Pick a line, an arc or a circle, or press Enter to pick a vertex and two points.");
   const q = yield pickReq(c, "Select second line");
-  const h2 = q && objectAt(q);
-  const g2 = getObj(h2);
+  const h2 = q && await objectAt(q);
+  const g2 = await getObj(h2);
   if (!g2 || g2.type !== "LINE") return c.log("That is not a line.");
   const loc = yield c.point("Specify dimension arc line location");
-  if (loc) done(c.edit(`dim-angular-lines ${h} ${h2} ${P(loc)}`));
+  if (loc) done(await c.edit(`dim-angular-lines ${h} ${h2} ${P(loc)}`));
 }
 
-function* cmdDimNext(c, baseline) {
-  let base = doc.lastDim && getObj(doc.lastDim)?.type?.startsWith("DIMENSION") ? doc.lastDim : null;
+async function* cmdDimNext(c, baseline) {
+  let base = doc.lastDim && await getObj(doc.lastDim)?.type?.startsWith("DIMENSION") ? doc.lastDim : null;
   if (!base) {
     const p = yield pickReq(c, "Select base dimension");
-    const h = p && objectAt(p);
-    if (!h || !getObj(h)?.type?.startsWith("DIMENSION")) return c.log("That is not a dimension.");
+    const h = p && await objectAt(p);
+    if (!h || !await getObj(h)?.type?.startsWith("DIMENSION")) return c.log("That is not a dimension.");
     base = h;
   }
-  c.exec("begin");
+  await c.exec("begin");
   try {
     for (;;) {
       const p = yield c.point("Specify a second extension line origin", { options: ["Select"] });
       if (!p) break;
       if (p.option === "Select") {
         const q = yield pickReq(c, "Select base dimension");
-        const h = q && objectAt(q);
-        if (h && getObj(h)?.type?.startsWith("DIMENSION")) base = h;
+        const h = q && await objectAt(q);
+        if (h && await getObj(h)?.type?.startsWith("DIMENSION")) base = h;
         else c.log("That is not a dimension.");
         continue;
       }
-      const r = c.edit(`dim-${baseline ? "baseline" : "continue"} ${base} ${P(p)}`);
+      const r = await c.edit(`dim-${baseline ? "baseline" : "continue"} ${base} ${P(p)}`);
       if (r) base = doc.lastDim = r.handles[0];
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
   }
 }
 
-function* cmdBlock(c) {
+async function* cmdBlock(c) {
   const name = yield c.text("Enter block name");
   if (!name || !name.trim()) return;
   const base = yield c.point("Specify insertion base point");
   if (!base) return;
   const hs = yield* selected(c);
   if (!hs.length) return;
-  const r = c.edit(`block ${P(base)} convert ${hs.join(" ")} | ${name.trim()}`);
+  const r = await c.edit(`block ${P(base)} convert ${hs.join(" ")} | ${name.trim()}`);
   if (r) {
     selection.clear();
     doc.lastBlock = name.trim();
@@ -2779,8 +2925,8 @@ function* cmdBlock(c) {
   }
 }
 
-function* cmdInsert(c) {
-  const list = core.query(doc.id, "blocks")?.blocks || [];
+async function* cmdInsert(c) {
+  const list = (await core.query(doc.id, "blocks"))?.blocks || [];
   if (!list.length) return c.log("The drawing has no blocks yet: make one with BLOCK.");
   c.log(`Blocks: ${list.map((b) => b.name).join(", ")}`);
   const def = doc.lastBlock && list.some((b) => b.name === doc.lastBlock) ? doc.lastBlock : list[0].name;
@@ -2798,11 +2944,11 @@ function* cmdInsert(c) {
     const v = yield c.text(`${a.prompt || a.tag}`, { def: a.default });
     values.push(`${a.tag}=${(v === null ? a.default : v).replace(/\|/g, "/")}`);
   }
-  const r = c.edit(`insert ${P(at)} ${N(s)} ${rot === null ? 0 : deg(rot)} | ${blk.name}${values.length ? " | " + values.join(" | ") : ""}`);
+  const r = await c.edit(`insert ${P(at)} ${N(s)} ${rot === null ? 0 : deg(rot)} | ${blk.name}${values.length ? " | " + values.join(" | ") : ""}`);
   if (r) doc.lastBlock = blk.name;
 }
 
-function* cmdAttdef(c) {
+async function* cmdAttdef(c) {
   const tag = yield c.text("Enter attribute tag (one word)");
   if (!tag || !tag.trim()) return;
   const prompt = yield c.text("Enter attribute prompt", { def: tag.trim() });
@@ -2812,22 +2958,22 @@ function* cmdAttdef(c) {
   let h = yield c.distance("Specify height", { base: at, def: fmt(textHeight()) });
   if (h === null) h = textHeight();
   const rot = yield c.angle("Specify rotation angle", { base: at, def: "0" });
-  c.edit(`attdef ${P(at)} ${N(h)} ${rot === null ? 0 : deg(rot)} | ${tag.trim().toUpperCase()} | ${(prompt || tag).replace(/\|/g, "/")} | ${(dflt || "").replace(/\|/g, "/")}`);
+  await c.edit(`attdef ${P(at)} ${N(h)} ${rot === null ? 0 : deg(rot)} | ${tag.trim().toUpperCase()} | ${(prompt || tag).replace(/\|/g, "/")} | ${(dflt || "").replace(/\|/g, "/")}`);
 }
 
-function* cmdAttedit(c) {
+async function* cmdAttedit(c) {
   const p = yield pickReq(c, "Select block reference");
-  const h = p && objectAt(p);
-  const g = getObj(h);
+  const h = p && await objectAt(p);
+  const g = await getObj(h);
   if (!g || g.type !== "INSERT" || !g.attributes?.length) return c.log("That is not a block reference with attributes.");
-  c.exec("begin");
+  await c.exec("begin");
   try {
     for (const a of g.attributes) {
       const v = yield c.text(`${a.tag}`, { def: a.value });
-      if (v !== null && v !== a.value) c.edit(`attedit ${h} | ${a.tag} | ${v.replace(/\|/g, "/")}`);
+      if (v !== null && v !== a.value) await c.edit(`attedit ${h} | ${a.tag} | ${v.replace(/\|/g, "/")}`);
     }
   } finally {
-    c.exec("end");
+    await c.exec("end");
   }
 }
 
@@ -2835,7 +2981,7 @@ const LUNITS = [["Scientific", 1], ["Decimal", 2], ["Engineering", 3], ["Archite
 const AUNITS = [["Degrees", 0], ["DMS", 1], ["Grads", 2], ["Radians", 3]];
 const INSUNITS = [["Millimeters", 4], ["Inches", 1], ["Feet", 2], ["Centimeters", 5], ["Meters", 6], ["Unitless", 0]];
 
-function* cmdUnits(c) {
+async function* cmdUnits(c) {
   const i = doc.info;
   const pick = (list, v) => (list.find((x) => x[1] === v) || list[0])[0];
   const lt = yield c.option("Length type", LUNITS.map((x) => x[0]), { def: pick(LUNITS, i.lunits) });
@@ -2853,14 +2999,14 @@ function* cmdUnits(c) {
     scale = r && r.option === "No" ? 0 : 1;
   }
   if (luprec > 8 || auprec > 8) return c.log("Precision is 0 to 8.");
-  if (c.edit(`units ${ins} ${lunits} ${luprec} ${aunits} ${auprec} ${scale}`)) {
+  if (await c.edit(`units ${ins} ${lunits} ${luprec} ${aunits} ${auprec} ${scale}`)) {
     c.log(`Units: ${pick(INSUNITS, ins).toLowerCase()}, ${pick(LUNITS, lunits).toLowerCase()} lengths${scale ? "; the drawing was scaled to keep its size" : ""}.`);
     if (scale) zoomExtents();
   }
 }
 
-function* cmdLinetype(c) {
-  const lt = core.query(doc.id, "linetypes");
+async function* cmdLinetype(c) {
+  const lt = await core.query(doc.id, "linetypes");
   c.log(`Loaded: ${lt.loaded.map((l) => l.name).join(", ")}. Current: ${lt.current}.`);
   const r = yield c.option("Enter an option", ["Load", "Set", "?"], { def: "Set" });
   if (r === null) return;
@@ -2872,48 +3018,48 @@ function* cmdLinetype(c) {
   if (r.option === "Load") {
     c.log(`Library: ${lt.library.join(", ")}`);
     const t = yield c.text("Linetypes to load (separate with spaces)");
-    if (t && t.trim() && c.edit(`linetype-load ${t.trim()}`)) c.log("Loaded.");
+    if (t && t.trim() && await c.edit(`linetype-load ${t.trim()}`)) c.log("Loaded.");
     return;
   }
   const t = yield c.text("Linetype for new objects (ByLayer, ByBlock or a name)", { def: lt.current });
-  if (t && t.trim() && c.edit(`linetype-current ${t.trim()}`)) c.log(`New objects: ${t.trim()}.`);
+  if (t && t.trim() && await c.edit(`linetype-current ${t.trim()}`)) c.log(`New objects: ${t.trim()}.`);
 }
 
-function* cmdLtscale(c) {
+async function* cmdLtscale(c) {
   const v = yield* askNumber(c, "Enter new linetype scale factor", doc.info.ltscale);
-  if (typeof v === "number" && c.edit(`ltscale ${N(v)}`)) c.log(`Linetype scale ${v}.`);
+  if (typeof v === "number" && await c.edit(`ltscale ${N(v)}`)) c.log(`Linetype scale ${v}.`);
 }
 
-function* cmdLweight(c) {
+async function* cmdLweight(c) {
   c.log(`Current: ${doc.info.currentLineweight}. Weights: 0.13 0.18 0.25 0.35 0.50 0.70 1.00 mm.`);
   const t = yield c.text("Lineweight for new objects (ByLayer, ByBlock, Default or mm)", { def: doc.info.currentLineweight });
-  if (t && t.trim() && c.edit(`lineweight-current ${t.trim()}`)) c.log(`New objects: ${t.trim()}.`);
+  if (t && t.trim() && await c.edit(`lineweight-current ${t.trim()}`)) c.log(`New objects: ${t.trim()}.`);
 }
 
-function* cmdColor(c) {
+async function* cmdColor(c) {
   const t = yield c.text("Colour for new objects (ByLayer, ByBlock, 1 to 255 or #rrggbb)", { def: doc.info.currentColor });
-  if (t && t.trim() && c.edit(`color-current ${t.trim()}`)) c.log(`New objects: ${t.trim()}.`);
+  if (t && t.trim() && await c.edit(`color-current ${t.trim()}`)) c.log(`New objects: ${t.trim()}.`);
 }
 
-function* layoutNew(c) {
-  const lay = core.query(doc.id, "layouts");
+async function* layoutNew(c) {
+  const lay = await core.query(doc.id, "layouts");
   const n = lay.layouts.length;
   const name = yield c.text("Enter new layout name", { def: `Layout${n}` });
   const nm = (name && name.trim()) || `Layout${n}`;
   const paper = yield c.option("Paper size", lay.papers, { def: lay.defaultPaper });
-  if (c.edit(`layout-new ${paper ? paper.option.replace(/\s/g, "_") : "-"} ${nm}`)) switchSheetNow(nm);
+  if (await c.edit(`layout-new ${paper ? paper.option.replace(/\s/g, "_") : "-"} ${nm}`)) await switchSheetNow(nm);
 }
 
-function* layoutRename(c, old) {
+async function* layoutRename(c, old) {
   const name = yield c.text(`Enter new name for ${old}`, { def: old });
-  if (name && name.trim() && name.trim() !== old) c.edit(`layout-rename ${old} | ${name.trim()}`);
+  if (name && name.trim() && name.trim() !== old) await c.edit(`layout-rename ${old} | ${name.trim()}`);
   renderSheets();
 }
 
-function* cmdLayout(c) {
+async function* cmdLayout(c) {
   const r = yield c.option("Enter layout option", ["New", "Rename", "Delete", "Set", "?"], { def: "Set" });
   if (r === null) return;
-  const lay = core.query(doc.id, "layouts");
+  const lay = await core.query(doc.id, "layouts");
   if (r.option === "?") return c.log(`Sheets: ${lay.layouts.map((l) => l.name + (l.paperName ? ` (${l.paperName})` : "")).join(", ")}`);
   if (r.option === "New") return yield* layoutNew(c);
   const names = lay.layouts.filter((l) => r.option === "Set" || !l.model).map((l) => l.name);
@@ -2921,12 +3067,12 @@ function* cmdLayout(c) {
   const t = yield c.text(`Enter layout to ${r.option.toLowerCase()}`, { def: lay.layouts.find((l) => l.current)?.name });
   const name = t && t.trim();
   if (!name) return;
-  if (r.option === "Set") return switchSheetNow(name);
+  if (r.option === "Set") return await switchSheetNow(name);
   if (r.option === "Rename") return yield* layoutRename(c, name);
-  if (c.edit(`layout-delete ${name}`)) renderSheets();
+  if (await c.edit(`layout-delete ${name}`)) renderSheets();
 }
 
-function* cmdMview(c) {
+async function* cmdMview(c) {
   const i = doc.info;
   if (!i.paper) return c.log("Viewports go on a layout: click a layout tab first (LAYOUT New makes one).");
   const a = yield c.point("Specify corner of viewport", { options: ["Fit"] });
@@ -2940,11 +3086,11 @@ function* cmdMview(c) {
   }
   const s = yield c.text("Scale: Fit, or paper:model as 1:2, 1:1, 2:1", { def: "Fit" });
   const scale = s && s.trim() ? s.trim() : "fit";
-  if (c.edit(`mview ${corners} ${scale}`)) c.log("Viewport made. Select it to change its scale in Properties.");
+  if (await c.edit(`mview ${corners} ${scale}`)) c.log("Viewport made. Select it to change its scale in Properties.");
 }
 
-function* cmdPageSetup(c) {
-  const lay = core.query(doc.id, "layouts");
+async function* cmdPageSetup(c) {
+  const lay = await core.query(doc.id, "layouts");
   const cur = lay.layouts.find((l) => l.current);
   const defPaper = cur?.paperName || lay.defaultPaper;
   const defOrient = cur?.paper && cur.paper[1] > cur.paper[0] ? "Portrait" : "Landscape";
@@ -2952,7 +3098,7 @@ function* cmdPageSetup(c) {
   const paper = (yield c.option("Paper size", lay.papers, { def: defPaper }))?.option || defPaper;
   const orient = (yield c.option("Orientation", ["Landscape", "Portrait"], { def: defOrient }))?.option || defOrient;
   const color = (yield c.option("Plot in", ["Monochrome", "Color"], { def: defColor }))?.option || defColor;
-  const ok = c.edit(`page-setup ${paper.replace(/\s/g, "_")} ${orient === "Portrait" ? "portrait" : "landscape"} ${color === "Color" ? 0 : 1}`);
+  const ok = await c.edit(`page-setup ${paper.replace(/\s/g, "_")} ${orient === "Portrait" ? "portrait" : "landscape"} ${color === "Color" ? 0 : 1}`);
   if (ok) {
     if (doc.info.paper) zoomExtents();
     c.log(`${cur?.name || "This sheet"}: ${paper}${orient === "Portrait" ? " portrait" : ""}, ${color === "Color" ? "in colour" : "monochrome"}.`);
@@ -2960,22 +3106,40 @@ function* cmdPageSetup(c) {
 }
 
 /** PLOT and PRINT: the sheet as a PDF, set up first; PRINT opens it for
- *  the browser's print dialog. */
-function* cmdPlot(c, print = false) {
+ *  the print dialog (the browser's on the web, the PDF viewer's in the app). */
+async function* cmdPlot(c, print = false) {
   const r = yield c.option(`Plot ${doc.info.space || "Model"} to PDF`, ["Plot", "Setup"], { def: "Plot" });
   if (r?.option === "Setup") yield* cmdPageSetup(c);
-  plotPdf(print);
+  await plotPdf(print);
 }
 
-function plotPdf(print = false) {
+async function plotPdf(print = false) {
   let out;
   try {
-    out = core.save(doc.id, "pdf", user());
+    out = await core.save(doc.id, "pdf", user());
   } catch (e) {
     return handleError(e);
   }
   const base = doc.name.replace(/\.(dwg|dxf|cad|blc|svg)$/i, "");
   const name = `${base}${doc.info.paper ? `-${doc.info.space}` : ""}.pdf`;
+  if (host.native) {
+    // Plot asks where to save the PDF; Print hands it to the system's
+    // viewer, whose print dialog chooses the printer.
+    try {
+      if (print) {
+        await host.showPdf(name, out.bytes, true);
+        return log(`Opened ${name} to print`, "ok");
+      }
+      const path = await host.saveDialog(name, "pdf", TYPES.pdf.description);
+      if (!path) return;
+      await host.writeFile(path, out.bytes);
+      log(`Plotted ${baseName(path)}`, "ok");
+      toast(`Plotted ${baseName(path)}`);
+    } catch (e) {
+      toast(e.message || String(e), true);
+    }
+    return;
+  }
   const url = URL.createObjectURL(new Blob([out.bytes], { type: "application/pdf" }));
   if (print) {
     const w = window.open(url, "_blank");
@@ -3076,16 +3240,17 @@ const COMMANDS = [
   { name: "CLOSE", aliases: [], desc: "close the drawing (Ctrl+W)", instant: true, needsDoc: true, run: () => closeDoc(doc) },
 ];
 
-function history(which) {
+async function history(which) {
   if (runner) cancelCommand(false);
+  const d = doc;
   try {
-    core.exec(doc.id, which);
+    await core.exec(d.id, which);
   } catch (e) {
     if (e instanceof CoreCrash) throw e;
     return logError(e.message.replace(/^./, (c) => c.toUpperCase()));
   }
   selection.clear();
-  refresh(doc);
+  await refresh(d);
 }
 
 function selectAll() {
@@ -3157,7 +3322,7 @@ function propertyMenu(row, g, which) {
     return showMenu(row, [["ByLayer", "", () => applySet(h, "color", "ByLayer")], ["ByBlock", "", () => applySet(h, "color", "ByBlock")], ...LAYER_COLORS.map(([i, name]) => [`<span class="sw" style="background:${aciCss(i)};margin-right:8px"></span>${name}`, String(i), () => applySet(h, "color", i)])]);
   }
   if (which === "linetype") {
-    const lt = core.query(doc.id, "linetypes");
+    const lt = doc.linetypes || { loaded: [], library: [] };
     const names = ["ByLayer", "ByBlock", ...lt.loaded.map((l) => l.name), ...lt.library.filter((n) => !lt.loaded.some((l) => l.name === n)).slice(0, 12)];
     return showMenu(row, names.map((n) => [esc(n), lt.loaded.some((l) => l.name === n) || n.startsWith("By") ? "" : "load", () => applySet(h, "linetype", n)]));
   }
@@ -3182,7 +3347,12 @@ function renderProps() {
     return;
   }
   const h = [...selection][0];
-  const g = core.query(doc.id, `get ${h}`);
+  const g = selectedObject();
+  if (g === undefined) {
+    // Asked for; drawn again when the core answers.
+    loadSelected();
+    return;
+  }
   if (!g) {
     el.innerHTML = `<div class="obj"><span class="t">Object ${esc(h)}</span><span class="pill">1 selected</span></div>`;
     return;
@@ -3237,15 +3407,16 @@ function editRow(row, g) {
   input.onblur = () => done(true);
 }
 
-function applyValue(h, field, text) {
+async function applyValue(h, field, text) {
+  const d = doc;
   if (field.startsWith("attr:")) {
     try {
-      core.exec(doc.id, `attedit ${h} | ${field.slice(5)} | ${text.replace(/\|/g, "/")}`);
+      await core.exec(d.id, `attedit ${h} | ${field.slice(5)} | ${text.replace(/\|/g, "/")}`);
     } catch (e) {
       if (e instanceof CoreCrash) return crashed(e);
       logError(e.message.replace(/^./, (c) => c.toUpperCase()));
     }
-    return refresh(doc);
+    return refresh(d);
   }
   if (field === "value" || field === "pattern" || field === "tag" || field === "prompt") return applySet(h, field, text);
   if (field === "vpscale") return applySet(h, "scale", text);
@@ -3258,7 +3429,7 @@ function applyValue(h, field, text) {
     return applySet(h, field, v);
   }
   const angle = field === "start" || field === "end" || field === "rotation" || field === "angle";
-  const r = core.query(doc.id, `${angle ? "angle" : "len"} ${text}`);
+  const r = await core.query(d.id, `${angle ? "angle" : "len"} ${text}`);
   if (!r) {
     logError(`"${text}" is not ${angle ? "an angle" : "a length"}.`);
     return renderProps();
@@ -3266,14 +3437,15 @@ function applyValue(h, field, text) {
   applySet(h, field, angle ? deg(r.value) : N(r.value));
 }
 
-function applySet(h, field, value) {
+async function applySet(h, field, value) {
+  const d = doc;
   try {
-    core.exec(doc.id, `set ${h} ${field} ${value}`);
+    await core.exec(d.id, `set ${h} ${field} ${value}`);
   } catch (e) {
     if (e instanceof CoreCrash) return crashed(e);
     logError(e.message.replace(/^./, (c) => c.toUpperCase()));
   }
-  refresh(doc);
+  await refresh(d);
 }
 
 // ---------------------------------------------------------------- layers
@@ -3308,7 +3480,7 @@ function renderLayers() {
     row.onclick = (e) => {
       const a = e.target.closest("button")?.dataset.a;
       if (a === "lt") {
-        const lt = core.query(doc.id, "linetypes");
+        const lt = doc.linetypes || { loaded: [], library: [] };
         const names = ["Continuous", ...lt.loaded.map((x) => x.name).filter((n) => n !== "Continuous"), ...lt.library.filter((n) => !lt.loaded.some((x) => x.name === n)).slice(0, 12)];
         return showMenu(e.target.closest("button"), [
           ...names.map((n) => [`Linetype ${esc(n)}`, (l.linetype || "Continuous").toUpperCase() === n.toUpperCase() ? "●" : lt.loaded.some((x) => x.name === n) ? "" : "load", () => layerExec(`layer-linetype ${l.handle} ${n}`)]),
@@ -3335,14 +3507,15 @@ function aciCss(i) {
   return { 1: "#ff4d4d", 2: "#ffe14d", 3: "#3ddc84", 4: "#3fe0ff", 5: "#0000ff", 6: "#ff00ff", 7: "#ffffff", 8: "#808080", 9: "#c0c0c0" }[i];
 }
 
-function layerExec(cmd) {
+async function layerExec(cmd) {
+  const d = doc;
   try {
-    core.exec(doc.id, cmd);
+    await core.exec(d.id, cmd);
   } catch (e) {
     if (e instanceof CoreCrash) return crashed(e);
     return toast(e.message.replace(/^./, (c) => c.toUpperCase()), true);
   }
-  refresh(doc);
+  await refresh(d);
 }
 
 function addLayerRow() {
@@ -3392,7 +3565,8 @@ function renderSheet() {
     html += `<div class="prompt-line"><b>${runner.name === "GRIP" ? "EDIT" : runner.name}</b> ${esc(runner.req.prompt)} ${opts}</div>`;
   }
   if (selection.size === 1) {
-    const g = core.query(doc.id, `get ${[...selection][0]}`);
+    const g = selectedObject();
+    if (g === undefined) loadSelected();
     if (g) {
       const rows = propRows(g);
       const fields =
@@ -3467,6 +3641,14 @@ const TYPES = {
 
 async function openDialog() {
   if (!core) return;
+  if (host.native) {
+    try {
+      for (const f of await host.openDialog()) await openFile(f, null);
+    } catch (e) {
+      toast(e.message || String(e), true);
+    }
+    return;
+  }
   if (window.showOpenFilePicker) {
     try {
       const hs = await window.showOpenFilePicker({ multiple: true, types: [{ description: "Drawings", accept: { "application/octet-stream": [".dwg", ".dxf", ".cad", ".blc"] } }] });
@@ -3485,12 +3667,23 @@ function user() {
   }
 }
 
-/** Save in the drawing's own format, to its own file when the browser allows. */
+/** Save in the drawing's own format, to its own file: always in the app,
+ *  and on the web when the browser allows writing back to the file. */
 async function save() {
   if (!doc) return;
-  if (doc.fileHandle?.createWritable) {
+  const d = doc;
+  if (host.native && d.path && d.format !== "svg") {
     try {
-      const { bytes, notes } = core.save(doc.id, doc.format, user());
+      const { bytes, notes } = await core.save(d.id, d.format, user());
+      await host.writeFile(d.path, bytes);
+      return saved(d, d.name, notes, false, bytes);
+    } catch (e) {
+      if (e instanceof CoreCrash) return crashed(e);
+      toast(`Saving to ${d.name} failed (${e.message || e}); choose where to save.`, true);
+    }
+  } else if (d.fileHandle?.createWritable) {
+    try {
+      const { bytes, notes } = await core.save(d.id, d.format, user());
       const w = await doc.fileHandle.createWritable();
       await w.write(bytes);
       await w.close();
@@ -3508,21 +3701,35 @@ async function saveAs(format) {
   if (!doc) return;
   const ext = format === "dxfb" ? "dxf" : format;
   const name = `${doc.name.replace(/\.(dwg|dxf|cad|blc|svg)$/i, "")}.${ext}`;
+  const d = doc;
   let out;
   try {
-    out = core.save(doc.id, format, user());
+    out = await core.save(d.id, format, user());
   } catch (e) {
     return handleError(e);
   }
   const keeps = format !== "svg";
+  if (host.native) {
+    try {
+      const path = await host.saveDialog(name, ext, TYPES[format].description);
+      if (!path) return;
+      await host.writeFile(path, out.bytes);
+      const nm = baseName(path);
+      if (keeps) Object.assign(d, { path, fileHandle: null, format: ext, name: nm });
+      saved(d, nm, out.notes, !keeps, out.bytes);
+    } catch (e) {
+      toast(e.message || String(e), true);
+    }
+    return;
+  }
   if (window.showSaveFilePicker) {
     try {
       const h = await window.showSaveFilePicker({ suggestedName: name, types: [TYPES[format]] });
       const w = await h.createWritable();
       await w.write(out.bytes);
       await w.close();
-      if (keeps) Object.assign(doc, { fileHandle: h, format: ext, name: h.name });
-      saved(doc, h.name, out.notes, !keeps, out.bytes);
+      if (keeps) Object.assign(d, { fileHandle: h, format: ext, name: h.name });
+      saved(d, h.name, out.notes, !keeps, out.bytes);
     } catch (e) {
       if (e.name !== "AbortError") toast(e.message, true);
     }
@@ -3535,8 +3742,8 @@ async function saveAs(format) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-  if (keeps) Object.assign(doc, { format: ext, name });
-  saved(doc, name, out.notes, !keeps, out.bytes);
+  if (keeps) Object.assign(d, { format: ext, name });
+  saved(d, name, out.notes, !keeps, out.bytes);
 }
 
 function saved(d, name, notes, exportOnly = false, bytes = null) {
@@ -3551,6 +3758,13 @@ function saved(d, name, notes, exportOnly = false, bytes = null) {
 addEventListener("beforeunload", (e) => {
   if (docs.some((d) => d.info?.dirty)) e.preventDefault();
 });
+/** Asked by the app before its window closes: true when nothing is unsaved
+ *  or the person agrees to lose it. */
+globalThis.blackcadCanClose = () => {
+  const dirty = docs.filter((d) => d.info?.dirty);
+  if (!dirty.length) return true;
+  return confirm(`${dirty.map((d) => d.name).join(", ")} ${dirty.length === 1 ? "has" : "have"} unsaved changes. Close BlackCAD anyway?`);
+};
 
 // ---------------------------------------------------------------- blackboard
 
@@ -5659,15 +5873,22 @@ const Board = (() => {
   const kbd = (t) => `<kbd>${t}</kbd>`;
 
   // ---------------------------------------------------------------- reading the open drawing
+  /** The open drawing's objects as the core describes them, read before
+   *  an exercise is checked (readEntities); the checks themselves read this
+   *  copy. */
+  let snapshot = null;
+  async function readEntities() {
+    snapshot = null;
+    if (!doc) return;
+    const d = doc;
+    const hs = [];
+    for (const [h, idxs] of d.disp.byHandle) if (!idxs.every((k) => d.disp.items[k]?.dead)) hs.push(h);
+    const gs = await Promise.all(hs.map((h) => core.query(d.id, `get ${h}`)));
+    snapshot = { d, list: gs.filter(Boolean) };
+  }
   function entities() {
-    if (!doc) return [];
-    const out = [];
-    for (const [h, idxs] of doc.disp.byHandle) {
-      if (idxs.every((k) => doc.disp.items[k]?.dead)) continue;
-      const g = core.query(doc.id, `get ${h}`);
-      if (g) out.push(g);
-    }
-    return out;
+    if (!doc || snapshot?.d !== doc) return [];
+    return snapshot.list;
   }
   const same = (a, b, t = xtol()) => Math.abs(a - b) <= t;
   const samePt = (p, q, t = xtol()) => same(p[0], q[0], t) && same(p[1], q[1], t);
@@ -5712,17 +5933,18 @@ const Board = (() => {
   let printing = false;
   /** Where the exercise's starting shapes are; a printed sheet assumes 0,0. */
   const T0 = () => tstate().o || (printing ? [0, 0] : null);
-  function runSetup(st) {
+  async function runSetup(st) {
     const t = tstate();
-    const o = st.task.setup.run();
+    const o = await st.task.setup.run();
     // what's there now is the starting point; anything newer is the learner's
     if (o) Object.assign(t, { o, before: new Set(doc.disp.byHandle.keys()), res: null });
   }
-  function runTaskCheck(st) {
+  async function runTaskCheck(st) {
     const t = tstate();
     if (!doc) t.res = [{ ok: false, t: "Open or start a drawing first." }];
     else
       try {
+        await readEntities();
         t.res = st.task.check(t);
       } catch (e) {
         t.res = [{ ok: false, t: `Couldn't read the drawing: ${esc(e.message || String(e))}` }];
@@ -7296,19 +7518,21 @@ const Board = (() => {
 
   /** The drawing on a sheet: the core makes the layout, the border, a viewport
    *  at the best standard scale and the title block (cad_core::sheet). */
-  function placeLayout() {
-    if (!doc) newDrawing(inch());
+  async function placeLayout() {
+    if (!doc) await newDrawing(inch());
     if (!doc) return;
+    const d = doc;
     const fields = TB_FIELDS().filter(([k]) => k !== "SCALE").map(([k, v]) => `${k}=${String(v).replace(/\|/g, "/")}`).join(" | ");
+    let made;
     try {
-      core.exec(doc.id, `sheet ${s.sheet} | - | ${fields}`);
+      await core.exec(d.id, `sheet ${s.sheet} | - | ${fields}`);
+      made = ((await core.query(d.id, "layouts"))?.layouts || []).filter((l) => !l.model).at(-1);
     } catch (e) {
       if (e instanceof CoreCrash) return crashed(e);
       return toast(e.message.replace(/^./, (c) => c.toUpperCase()), true);
     }
-    const made = core.query(doc.id, "layouts").layouts.filter((l) => !l.model).at(-1);
-    refresh(doc);
-    if (made) switchSheetNow(made.name);
+    await refresh(d);
+    if (made && d === doc) await switchSheetNow(made.name);
     checked = null;
     log(`Blackboard: ${made ? made.name : "sheet"} made. Undo takes it away.`, "ok");
     close();
@@ -7586,7 +7810,7 @@ const Board = (() => {
   };
   /** The HOLE block, placed once: made from a drawn symbol, or inserted if the drawing already has it. */
   const holeBlock = (d) => {
-    if ((core.query(doc.id, "blocks")?.blocks || []).some((b) => b.name.toUpperCase() === "HOLE")) return d.exec(`insert ${d.pt(0, 0)} 1 0 | HOLE`);
+    if ((doc.blocks || []).some((b) => b.name.toUpperCase() === "HOLE")) return d.exec(`insert ${d.pt(0, 0)} 1 0 | HOLE`);
     return d.exec(`block ${d.pt(0, 0)} convert ${holeSym(d).join(" ")} | HOLE`);
   };
 
@@ -7607,7 +7831,7 @@ const Board = (() => {
           setup: { label: "Draw the symbol", run: () => placeOnDrawing("hole symbol", (d) => holeSym(d), { raw: true }) },
           do: () => (T0() ? [`Type ${kbd("B")} and Enter, and name it ${kbd("HOLE")}.`, "For the base point, snap to the circle's centre (CEN).", "Select the circle and both lines, then press Enter."] : [needSetup("Draw the symbol")]),
           check: () => {
-            const b = (core.query(doc.id, "blocks")?.blocks || []).find((x) => x.name.toUpperCase() === "HOLE");
+            const b = (doc.blocks || []).find((x) => x.name.toUpperCase() === "HOLE");
             const ins = entities().filter((g) => g.type === "INSERT" && String(g.block).toUpperCase() === "HOLE");
             return [{ ok: !!b, t: b ? "Block HOLE made" : "No block named HOLE yet." }, { ok: ins.length >= 1, t: ins.length ? "The symbol is now one object (an insert)" : "Nothing in the drawing uses the block yet." }];
           },
@@ -7640,7 +7864,7 @@ const Board = (() => {
           setup: { label: "Draw the circle", run: () => placeOnDrawing("circle for a numbered block", (d) => d.circle(0, 0, xv(12, 0.5)), { raw: true }) },
           do: () => (T0() ? [`${kbd("ATT")}: tag ${kbd("NUMBER")}, prompt ${kbd("Hole number")}, default ${kbd("1")}, click a point beside the circle, then Enter twice.`, `${kbd("B")}: name ${kbd("TAGGED")}, base point at the circle's centre, select the circle and the attribute text.`, `${kbd("I")}: ${kbd("TAGGED")}, click a point, Enter twice, then type a number.`] : [needSetup("Draw the circle")]),
           check: () => {
-            const b = (core.query(doc.id, "blocks")?.blocks || []).find((x) => x.attributes.length);
+            const b = (doc.blocks || []).find((x) => x.attributes.length);
             const ins = entities().filter((g) => g.type === "INSERT" && g.attributes?.length);
             return [{ ok: !!b, t: b ? `Block ${esc(b.name)} carries the field ${esc(b.attributes[0].tag)}` : "No block has an attribute yet." }, { ok: ins.length >= 1, t: ins.length ? "An insert holds a filled-in value" : "No insert with an attribute value yet." }];
           },
@@ -7745,11 +7969,11 @@ const Board = (() => {
   }
   /** Check the holes on the sheet shown against the shop's limits: the
    *  core measures (cad_core::check), the board explains. */
-  function runCheck() {
+  async function runCheck() {
     if (!doc) return toast("Open or start a drawing first.", true);
     let r;
     try {
-      r = core.query(doc.id, `check-holes ${N(rule.minDia())} ${N(rule.minWeb())} ${N(rule.holeBend())}`);
+      r = await core.query(doc.id, `check-holes ${N(rule.minDia())} ${N(rule.minWeb())} ${N(rule.holeBend())}`);
     } catch (e) {
       return handleError(e);
     }
@@ -7793,10 +8017,11 @@ const Board = (() => {
 
   /** opts.at: the origin in drawing units (default: beside what's drawn).
    *  opts.raw: the build works in drawing units rather than millimetres. */
-  function placeOnDrawing(what, build, opts = {}) {
+  async function placeOnDrawing(what, build, opts = {}) {
     if (!core) return null;
-    if (!doc) newDrawing(inch());
+    if (!doc) await newDrawing(inch());
     if (!doc) return null;
+    const dd = doc;
     const k0 = unitScale();
     const k = opts.raw ? 1 : k0;
     const b = doc.disp.bounds;
@@ -7805,7 +8030,15 @@ const Board = (() => {
     const textH = (inch() ? 3.175 : 3.5) * k0;
     const prev = doc.info.layers.find((l) => l.current);
     const layers = new Map(doc.info.layers.map((l) => [l.name.toUpperCase(), l.handle]));
-    const exec = (line) => core.exec(doc.id, line);
+    // The build runs at once and writes down its command lines; they are
+    // then run in order, in one undo step. A handle a line will make (a
+    // new layer, a circle a block is made from) is a placeholder until then,
+    // filled in from that line's answer before the lines that use it run.
+    const lines = [];
+    const exec = (line) => {
+      const i = lines.push(line) - 1;
+      return { handles: [0, 1, 2, 3, 4, 5, 6, 7].map((k) => `\u0001${i}.${k}\u0001`) };
+    };
     const onLayer = (name, aci, fn) => {
       let h = layers.get(name);
       if (!h) {
@@ -7840,19 +8073,27 @@ const Board = (() => {
       u: U().toUpperCase(),
     };
     try {
-      exec("begin");
+      build(api);
+      const answers = [];
+      const fill = (line) => line.replace(/\u0001(\d+)\.(\d+)\u0001/g, (_, i, k) => {
+        const h = answers[+i]?.handles?.[+k];
+        if (!h) throw new Error("a step of the drawing did not make what the next one needs");
+        return h;
+      });
+      await core.exec(dd.id, "begin");
       try {
-        build(api);
+        for (let i = 0; i < lines.length; i++) answers[i] = await core.exec(dd.id, fill(lines[i]));
       } finally {
-        exec("end");
+        await core.exec(dd.id, "end");
       }
     } catch (e) {
       if (e instanceof CoreCrash) return crashed(e);
       toast(e.message || String(e), true);
-      refresh(doc);
+      await refresh(dd);
       return null;
     }
-    refresh(doc);
+    await refresh(dd);
+    if (dd !== doc) return [ox, oy];
     zoomExtents();
     checked = null;
     log(`Blackboard: ${what} drawn. One Undo takes it away.`, "ok");
@@ -8025,7 +8266,7 @@ const Board = (() => {
       sec(`Material: ${MAT().name}`, "mat", SET_ROWS.mat, matButtons()) +
       sec("Weld and assembly", "shop", SET_ROWS.asm) +
       `<div class="bb-row"><button class="chalkbtn" data-act="print-card">Print the shop card</button><button class="chalkbtn" data-act="reset-shop">Put back the defaults</button></div>` +
-      `<p class="note">Saved in this browser. Lesson sliders marked <i class="shoptag">shop</i> change these numbers too.</p>`
+      `<p class="note">Saved ${host.settingsPlace}. Lesson sliders marked <i class="shoptag">shop</i> change these numbers too.</p>`
     );
   }
 
@@ -8431,11 +8672,14 @@ const Board = (() => {
     if (a === "task-setup" || a === "task-check" || a === "task-show") {
       const st = LESSON.steps[step];
       if (!st.task) return;
-      if (a === "task-setup") return runSetup(st);
-      if (a === "task-show") return st.task.show();
-      runTaskCheck(st);
-      const t = $("#bb-task");
-      if (t) t.innerHTML = taskHtml(st);
+      if (a === "task-setup") return runSetup(st).catch(handleError);
+      if (a === "task-show") return Promise.resolve(st.task.show()).catch(handleError);
+      runTaskCheck(st)
+        .then(() => {
+          const t = $("#bb-task");
+          if (t) t.innerHTML = taskHtml(st);
+        })
+        .catch(handleError);
       return;
     }
     if (a === "wside") {
@@ -8452,9 +8696,9 @@ const Board = (() => {
       persist();
       return;
     }
-    if (a === "check") return runCheck();
+    if (a === "check") return runCheck().catch(handleError);
     if (a === "show") return showOffenders();
-    if (a === "place") return LESSON.steps[step].place?.run();
+    if (a === "place") return Promise.resolve(LESSON.steps[step].place?.run()).catch(handleError);
     if (a === "print-card") return printCard();
     if (a === "print-table") return printTable();
     if (a === "reset-shop") {
