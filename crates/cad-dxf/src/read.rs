@@ -161,6 +161,14 @@ fn next_down(x: f64) -> f64 {
     -next_up(-x)
 }
 
+/// The key a symbol table name is found by: AutoCAD treats names alike
+/// whatever their letter case, and a file may spell the same letter as
+/// itself or as a `\U+XXXX` escape (`Ä` or `\U+00C4`), so escapes are
+/// expanded and letters compared in upper case, beyond ASCII too.
+fn name_key(name: &str) -> String {
+    crate::text::expand_unicode_escapes(name).to_uppercase()
+}
+
 /// The groups of one record (after its `0` group), with accessors.
 #[derive(Clone, Copy)]
 struct G<'a>(&'a [Group]);
@@ -499,8 +507,8 @@ impl Reader {
             .objects
             .values()
             .filter_map(|o| match &o.kind {
-                ObjectKind::Layer(l) => Some(((0x33, l.name.to_ascii_uppercase()), o.handle)),
-                ObjectKind::BlockHeader(b) => Some(((0x31, b.name.to_ascii_uppercase()), o.handle)),
+                ObjectKind::Layer(l) => Some(((0x33, name_key(&l.name)), o.handle)),
+                ObjectKind::BlockHeader(b) => Some(((0x31, name_key(&b.name)), o.handle)),
                 _ => None,
             })
             .collect();
@@ -521,7 +529,7 @@ impl Reader {
         let made = self.making(|d| d.add_layer(name, Color::Index(7), Handle::NULL, Lineweight::Default));
         match made {
             Ok(h) => {
-                self.names.insert((0x33, name.to_ascii_uppercase()), h);
+                self.names.insert((0x33, name_key(name)), h);
                 self.notes.push(format!("layer {name} is named but not defined; made with default properties"));
                 h
             }
@@ -829,7 +837,16 @@ impl Reader {
             *self.skipped.entry(format!("{} without a handle", o.type_name)).or_default() += 1;
             return;
         }
-        self.d.objects.insert(o.handle, o);
+        // Handles are unique in a sound file. A later record with a handle
+        // already used replaces the earlier one, and the reader says so
+        // rather than losing it quietly.
+        let later = o.type_name.clone();
+        if let Some(earlier) = self.d.objects.insert(o.handle, o) {
+            *self
+                .skipped
+                .entry(format!("{} replaced by a later {later} with the same handle", earlier.type_name))
+                .or_default() += 1;
+        }
     }
 
     fn xdata(&self, groups: &[Group]) -> Vec<XData> {
@@ -873,7 +890,7 @@ impl Reader {
                         XValue::Open
                     }
                 }
-                1003 => XValue::Layer(self.names.get(&(0x33, vs(v).to_ascii_uppercase())).copied().unwrap_or(Handle::NULL)),
+                1003 => XValue::Layer(self.names.get(&(0x33, name_key(&vs(v)))).copied().unwrap_or(Handle::NULL)),
                 1004 => XValue::Bytes(match v {
                     Value::Bytes(b) => b.clone(),
                     _ => Vec::new(),
@@ -908,7 +925,7 @@ impl Reader {
     }
 
     fn lookup(&self, table: u16, name: &str) -> Handle {
-        self.names.get(&(table, name.to_ascii_uppercase())).copied().unwrap_or(Handle::NULL)
+        self.names.get(&(table, name_key(name))).copied().unwrap_or(Handle::NULL)
     }
 
     // ----- tables -------------------------------------------------------------
@@ -1179,7 +1196,7 @@ impl Reader {
         };
         let type_name = crate::dwg::fixed_type_name(rec).unwrap_or("RECORD");
         let o = self.new_object(r, rec, type_name, kind);
-        self.names.insert((rec, name.to_ascii_uppercase()), r.handle);
+        self.names.insert((rec, name_key(&name)), r.handle);
         self.table_records.entry(rec).or_default().push(r.handle);
         self.insert(o);
         Ok(())

@@ -106,12 +106,54 @@ fn int_of(v: &Value) -> i64 {
     }
 }
 
-/// Text in a DXF line: line breaks and other control characters would end
-/// the line early, so they become spaces.
+/// Text in a DXF line, with the DXF reference's caret encoding: a control
+/// character below 32 becomes `^` and the character 64 above it (`^J` for a
+/// line feed), and a caret itself becomes `^ ` (caret, space), so none of
+/// them ends the line early and the text reads back the same. Other
+/// control characters, which have no caret form, become spaces.
 fn line_safe(s: &str) -> String {
-    s.chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .collect()
+    let mut o = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '^' => o.push_str("^ "),
+            '\0'..='\u{1f}' => {
+                o.push('^');
+                o.push(char::from(c as u8 + 64));
+            }
+            c if c.is_control() => o.push(' '),
+            c => o.push(c),
+        }
+    }
+    o
+}
+
+/// The text a DXF line's caret encoding stands for: `^ ` is a caret, and
+/// `^` before `@` to `_` the control character 64 below it. A caret before
+/// anything else is kept as it is.
+fn caret_decoded(s: &str) -> String {
+    if !s.contains('^') {
+        return s.to_string();
+    }
+    let mut o = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '^' {
+            o.push(c);
+            continue;
+        }
+        match chars.peek().copied() {
+            Some(' ') => {
+                chars.next();
+                o.push('^');
+            }
+            Some(n @ '@'..='_') => {
+                chars.next();
+                o.push(char::from(n as u8 - 64));
+            }
+            _ => o.push('^'),
+        }
+    }
+    o
 }
 
 /// ASCII DXF, CR LF line ends, UTF-8 text (AC1021 and later).
@@ -295,10 +337,10 @@ pub fn from_ascii(bytes: &[u8]) -> crate::Result<Vec<Group>> {
         let t = raw.trim();
         let bad = || Error::format(format!("DXF line {}: group {code} value {t:?}", i + 2));
         let value = match kind(code) {
-            Kind::Str => Value::Str(raw.to_string()),
+            Kind::Str => Value::Str(caret_decoded(raw)),
             Kind::Handle => match u64::from_str_radix(t, 16) {
                 Ok(h) => Value::Handle(h),
-                Err(_) => Value::Str(raw.to_string()),
+                Err(_) => Value::Str(caret_decoded(raw)),
             },
             Kind::Real => Value::Real(t.parse().map_err(|_| bad())?),
             Kind::I16 | Kind::I32 | Kind::I64 | Kind::Bool => match t.parse::<i64>() {
@@ -325,6 +367,24 @@ pub fn from_ascii(bytes: &[u8]) -> crate::Result<Vec<Group>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn carets_encode_and_decode() {
+        for (text, wire) in [
+            ("^ C", "^  C"),
+            ("a\nb\tc", "a^Jb^Ic"),
+            ("^", "^ "),
+            ("plain", "plain"),
+            ("\0x\u{1f}", "^@x^_"),
+        ] {
+            assert_eq!(line_safe(text), wire, "{text:?}");
+            assert_eq!(caret_decoded(wire), text, "{wire:?}");
+        }
+        // A caret before anything else, or at the end, is kept.
+        assert_eq!(caret_decoded("x^a^"), "x^a^");
+        // Controls with no caret form become spaces.
+        assert_eq!(line_safe("a\u{7f}b"), "a b");
+    }
 
     #[test]
     fn binary_groups_read_back_as_written() {
