@@ -1607,8 +1607,13 @@ impl Reader {
                 })
             }
             "INSERT" => {
-                let minsert = body.has_marker("AcDbMInsertBlock");
-                let b = body.sub(if minsert { "AcDbMInsertBlock" } else { "AcDbBlockReference" });
+                let marked = body.has_marker("AcDbMInsertBlock");
+                let b = body.sub(if marked { "AcDbMInsertBlock" } else { "AcDbBlockReference" });
+                // The DXF reference lists the array's counts (70, 71) and
+                // spacings (44, 45) with the INSERT's own groups, so a file
+                // may give them without the MINSERT marker: more than one
+                // column or row is still an array.
+                let minsert = marked || b.i(70, 1) > 1 || b.i(71, 1) > 1;
                 type_code = if minsert { 0x08 } else { 0x07 };
                 let has = body.i(66, 0) != 0 || b.i(66, 0) != 0;
                 ObjectKind::Insert(Insert {
