@@ -123,13 +123,36 @@ def big_b(fonts):
     ty = S / 2 + (y0 + y1) / 2 * k
     pen = SVGPathPen(glyphs, num)
     g.draw(TransformPen(pen, (k, 0, 0, -k, tx, ty)))
-    return f'<path d="{pen.getCommands()}" fill="{CHALK}" filter="url(#bc-chalk-b)"/>'
+    d = pen.getCommands()
+    # The board shows through the chalk's streaks, but the centerlines pass
+    # behind the letter, as a centerline passes behind a part: the B's
+    # outline is knocked out of them first.
+    return (
+        f'<path d="{d}" fill="{INK}" stroke="{INK}" stroke-width="10" stroke-linejoin="round"/>'
+        f'<path d="{d}" fill="{CHALK}" filter="url(#bc-chalk-b)"/>'
+    )
+
+
+def centerlines():
+    """Centerlines through the tile's centre, behind the B: long-short dash,
+    in the centerline layer's yellow, the short dash on the crossing as a
+    CENTER linetype draws it."""
+    lo, hi = 84, S - 84
+    long, gap, short = 92, 22, 22
+    period = long + gap + short + gap
+    # Offset the pattern so a short dash sits on the centre.
+    mid = long + gap + short / 2
+    off = (mid - (S / 2 - lo)) % period
+    return (
+        f'<path d="M{S // 2} {lo}V{hi}M{lo} {S // 2}H{hi}" fill="none" stroke="{YELLOW}" stroke-width="18" '
+        f'stroke-dasharray="{long} {gap} {short} {gap}" stroke-dashoffset="{num(-off)}"/>'
+    )
 
 
 def icon(fonts, grid, maskable=False):
     """The icon as an SVG document. A maskable one fills the square and
     keeps the B inside the safe circle launchers crop to."""
-    b = big_b(fonts)
+    b = centerlines() + "\n  " + big_b(fonts)
     if maskable:
         b = f'<g transform="translate({S * 0.1:.1f} {S * 0.1:.1f}) scale(0.8)">{b}</g>'
     return (
