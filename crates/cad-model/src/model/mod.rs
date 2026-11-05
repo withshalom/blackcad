@@ -293,6 +293,9 @@ pub struct MText {
     /// Raw contents with inline formatting codes.
     pub contents: String,
     pub linespacing_factor: f64,
+    /// Line spacing "exactly" (DXF 73 = 2) rather than "at least" (1, the
+    /// default), where lines grow for taller characters.
+    pub linespacing_exact: bool,
     pub style: Handle,
 }
 

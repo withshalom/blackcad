@@ -396,6 +396,7 @@ pub(super) fn sample() -> Drawing {
                 drawing_dir: 5,
                 contents: "\\fArial|b1;NOTES\\PDeburr all edges".into(),
                 linespacing_factor: 1.0,
+                linespacing_exact: false,
                 style: Handle::NULL,
             }),
         ),

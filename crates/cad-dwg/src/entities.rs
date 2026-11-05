@@ -550,10 +550,13 @@ pub(crate) fn mtext(s: &mut Streams) -> Result<MText> {
         linespacing_factor: 1.0,
         ..Default::default()
     };
-    if s.ver >= V::R2007 {
-        m.rect_height = s.dat.bd()?; // uncertain
-    }
+    // Reference rectangle: width (DXF 41), then from R2007 its height (46).
+    // The writer and the field probe of AutoCAD's MTEXT records use this
+    // order; reading the height first swapped the two.
     m.rect_width = s.dat.bd()?;
+    if s.ver >= V::R2007 {
+        m.rect_height = s.dat.bd()?;
+    }
     m.text_height = s.dat.bd()?;
     m.attachment = s.dat.bs()?;
     m.drawing_dir = s.dat.bs()?;
@@ -561,7 +564,7 @@ pub(crate) fn mtext(s: &mut Streams) -> Result<MText> {
     let _ext_width = s.dat.bd()?;
     m.contents = s.tv()?;
     if s.ver >= V::R2000 {
-        let _linespacing_style = s.dat.bs()?;
+        m.linespacing_exact = s.dat.bs()? == 2;
         m.linespacing_factor = s.dat.bd()?;
         let _unknown = s.dat.b()?;
     }

@@ -107,6 +107,24 @@ fn vh(v: &Value) -> Handle {
     }
 }
 
+/// MTEXT's text direction in WCS: the x-axis (11) when the record gives
+/// one, otherwise the rotation angle (50) turned from the OCS x-axis,
+/// otherwise WCS x. The DXF reference describes 50 as radians, but the
+/// files met in practice (CADCraft's among them) write it in degrees like
+/// every other DXF angle, so it is read as degrees. To be checked against
+/// a file AutoCAD writes with group 50.
+fn mtext_x_axis(b: &G<'_>) -> Vec3 {
+    if b.get(11).is_some() || b.get(50).is_none() {
+        return b.p3(11, Vec3::X);
+    }
+    let angle = b.a(50, 0.0);
+    if !angle.is_finite() {
+        return Vec3::X;
+    }
+    let (ax, ay, _) = crate::geom::arbitrary_axes(b.p3(210, Vec3::Z));
+    ax * angle.cos() + ay * angle.sin()
+}
+
 /// Radians for a DXF angle in degrees, chosen so that the writer gives
 /// the same degrees back (the conversion can be a unit in the last place
 /// off either way).
@@ -1595,7 +1613,7 @@ impl Reader {
                 ObjectKind::MText(MText {
                     insertion: b.p3(10, Vec3::ZERO),
                     extrusion: b.p3(210, Vec3::Z),
-                    x_axis: b.p3(11, Vec3::X),
+                    x_axis: mtext_x_axis(&b),
                     rect_width: b.f(41, 0.0),
                     rect_height: b.f(46, 0.0),
                     text_height: b.f(40, 0.0),
@@ -1603,12 +1621,18 @@ impl Reader {
                     drawing_dir: b.i(72, 1) as u16,
                     contents,
                     linespacing_factor: b.f(44, 1.0),
+                    linespacing_exact: b.i(73, 1) == 2,
                     style: style_of(self, &b),
                 })
             }
             "INSERT" => {
-                let minsert = body.has_marker("AcDbMInsertBlock");
-                let b = body.sub(if minsert { "AcDbMInsertBlock" } else { "AcDbBlockReference" });
+                let marked = body.has_marker("AcDbMInsertBlock");
+                let b = body.sub(if marked { "AcDbMInsertBlock" } else { "AcDbBlockReference" });
+                // The DXF reference lists the array's counts (70, 71) and
+                // spacings (44, 45) with the INSERT's own groups, so a file
+                // may give them without the MINSERT marker: more than one
+                // column or row is still an array.
+                let minsert = marked || b.i(70, 1) > 1 || b.i(71, 1) > 1;
                 type_code = if minsert { 0x08 } else { 0x07 };
                 let has = body.i(66, 0) != 0 || b.i(66, 0) != 0;
                 ObjectKind::Insert(Insert {
