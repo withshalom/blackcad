@@ -1,6 +1,18 @@
 # Changelog
 
 ## Unreleased
+- A damaged or hostile DWG can no longer make the reader take gigabytes of
+  memory. Each section's size in a 2004–2018 file is only what its map
+  claims; the reader allocated it in full (up to 2 GB a section, for up to
+  4,096 sections), so a file of a few kilobytes could exhaust memory, and
+  where an allocation fails (phones, the web build) the whole program
+  stopped. All of a file's sections now share a budget of 64 times the
+  file's size (at least 64 MB); a section past it is refused, with a
+  message, before anything is allocated. AutoCAD's files hold 1.2 to 3.0
+  times their size.
+- `cad_dxf::to_bytes_within` writes a DXF within a size limit, stopping as
+  soon as the file would pass it. Text is counted after its caret encoding,
+  so a limit holds for text with control characters too.
 - BlackCAD has a logo and a new icon: a large handwritten B in white chalk
   on black model space, with a light grey grid and yellow centerlines
   passing behind it; the logo sets it beside "Black" in chalk and "CAD" in
