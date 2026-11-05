@@ -32,21 +32,27 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["cad"],
+        "ext": [
+          "cad"
+        ],
         "name": "BlackCAD drawing",
         "description": "BlackCAD drawing",
         "role": "Editor",
         "mimeType": "application/x-blackcad"
       },
       {
-        "ext": ["dwg"],
+        "ext": [
+          "dwg"
+        ],
         "name": "DWG drawing",
         "description": "DWG drawing",
         "role": "Editor",
         "mimeType": "image/vnd.dwg"
       },
       {
-        "ext": ["dxf"],
+        "ext": [
+          "dxf"
+        ],
         "name": "DXF drawing",
         "description": "DXF drawing",
         "role": "Editor",
@@ -66,7 +72,20 @@
     },
     "linux": {
       "deb": {
-        "section": "graphics"
+        "section": "graphics",
+        "desktopTemplate": "linux/blackcad.desktop",
+        "files": {
+          "/usr/share/mime/packages/blackcad.xml": "linux/blackcad-mime.xml"
+        }
+      },
+      "rpm": {
+        "desktopTemplate": "linux/blackcad.desktop",
+        "files": {
+          "/usr/share/mime/packages/blackcad.xml": "linux/blackcad-mime.xml"
+        }
+      },
+      "appimage": {
+        "bundleMediaFramework": false
       }
     }
   }
