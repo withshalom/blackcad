@@ -194,29 +194,37 @@ jobs:
           path: dist/BlackCAD.html
           archive: false
 
-  desktop:
-    # The desktop app (apps/desktop): one std-only program with the web
-    # workbench (the web job's build) embedded in it, which serves it on
-    # 127.0.0.1 and opens it in an app window of the Chromium-based browser on
-    # the computer. Built on each system for that system.
+  app:
+    # BlackCAD, the application (apps/shell): the workbench (the web job's
+    # build) in the system's own webview, the Rust engine native in the same
+    # process. Tauri 2 builds it and its installers on each system for that
+    # system. Unsigned until the signing secrets exist (apps/shell/README.md).
     needs: [web]
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Ubuntu 22.04: the .deb, .rpm and AppImage run on glibc 2.35+.
           - os: ubuntu-22.04
-            artifact: blackcad-desktop-linux-x86_64
-            bin: target/release/blackcad
+            artifact: blackcad-app-linux
+            args: ""
+            bundles: |
+              apps/shell/target/release/bundle/deb/*.deb
+              apps/shell/target/release/bundle/rpm/*.rpm
+              apps/shell/target/release/bundle/appimage/*.AppImage
           - os: windows-latest
-            artifact: blackcad-desktop-windows-x86_64
-            bin: target/release/blackcad.exe
+            artifact: blackcad-app-windows
+            args: ""
+            bundles: |
+              apps/shell/target/release/bundle/msi/*.msi
+              apps/shell/target/release/bundle/nsis/*.exe
+          # One app for Apple silicon and Intel Macs.
           - os: macos-latest
-            artifact: blackcad-desktop-macos-arm64
-            bin: target/release/blackcad
+            artifact: blackcad-app-macos
+            args: --target universal-apple-darwin
+            bundles: |
+              apps/shell/target/universal-apple-darwin/release/bundle/dmg/*.dmg
     runs-on: ${{ matrix.os }}
-    env:
-      BLACKCAD_WEB_DIR: ${{ github.workspace }}/dist/web
-      BLACKCAD_REQUIRE_WEB: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v8
@@ -224,38 +232,123 @@ jobs:
           name: blackcad-web
           path: dist/web
       - name: Toolchain
+        shell: bash
         run: |
           rustup toolchain install stable --profile minimal --component clippy
           rustup default stable
+          if [ "$RUNNER_OS" = macOS ]; then rustup target add aarch64-apple-darwin x86_64-apple-darwin; fi
+      - name: System libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Same version as the engine
+        shell: bash
+        run: |
+          root=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          app=$(sed -n 's/^version = "\(.*\)"/\1/p' apps/shell/Cargo.toml | head -n 1)
+          echo "engine $root, app $app"
+          [ "$root" = "$app" ] || { echo "::error::apps/shell/Cargo.toml version $app differs from the workspace's $root"; exit 1; }
       - name: Lint
         shell: bash
+        working-directory: apps/shell
         run: |
-          cargo clippy -p blackcad-desktop --all-targets -- -D warnings 2>&1 | tee "$RUNNER_TEMP/step.log" \
-            || { bash .github/annotate-failure.sh "Desktop lint" "$RUNNER_TEMP/step.log"; exit 1; }
+          cargo clippy --all-targets -- -D warnings 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash ../../.github/annotate-failure.sh "App lint" "$RUNNER_TEMP/step.log"; exit 1; }
       - name: Test
         shell: bash
+        working-directory: apps/shell
         run: |
-          cargo test --release -p blackcad-desktop 2>&1 | tee "$RUNNER_TEMP/step.log" \
-            || { bash .github/annotate-failure.sh "Desktop test" "$RUNNER_TEMP/step.log"; exit 1; }
-      - name: Build
+          cargo test 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash ../../.github/annotate-failure.sh "App test" "$RUNNER_TEMP/step.log"; exit 1; }
+      - name: Build the app and its installers
         shell: bash
+        working-directory: apps/shell
         run: |
-          cargo build --release -p blackcad-desktop 2>&1 | tee "$RUNNER_TEMP/step.log" \
-            || { bash .github/annotate-failure.sh "Desktop build" "$RUNNER_TEMP/step.log"; exit 1; }
-      - name: Serves the workbench
-        # The built program answers with the page and the core.
-        shell: bash
-        run: |
-          "${{ matrix.bin }}" --no-window --port 47655 &
-          pid=$!
-          sleep 3
-          curl -fsS http://127.0.0.1:47655/ | grep -qi "<title"
-          curl -fsS -o /dev/null -w "core.wasm: %{size_download} bytes\n" http://127.0.0.1:47655/core.wasm
-          kill $pid
+          # The web job built dist/web already.
+          npx --yes @tauri-apps/cli@2 build ${{ matrix.args }} --ci --config '{"build":{"beforeBuildCommand":""}}' 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash ../../.github/annotate-failure.sh "App build" "$RUNNER_TEMP/step.log"; exit 1; }
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.bin }}
+          path: ${{ matrix.bundles }}
+          if-no-files-found: error
+
+  app-android:
+    # The same app for Android (Tauri 2's Android target): the engine built
+    # for the phone's processor, the workbench in the Android System WebView.
+    # One APK for arm64, 32-bit ARM and x86_64 phones, tablets and emulators.
+    needs: [web]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v8
+        with:
+          name: blackcad-web
+          path: dist/web
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+      - name: Android project
+        # Generated from tauri.conf.json each time, with the app's icons.
+        shell: bash
+        working-directory: apps/shell
+        run: |
+          export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          npx --yes @tauri-apps/cli@2 android init --ci 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash ../../.github/annotate-failure.sh "Android project" "$RUNNER_TEMP/step.log"; exit 1; }
+          cp -R icons/android/. gen/android/app/src/main/res/
+      - name: APK
+        shell: bash
+        working-directory: apps/shell
+        run: |
+          export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          npx --yes @tauri-apps/cli@2 android build --apk --ci --target aarch64 --target armv7 --target x86_64 --config '{"build":{"beforeBuildCommand":""}}' 2>&1 | tee "$RUNNER_TEMP/step.log" \
+            || { bash ../../.github/annotate-failure.sh "Android build" "$RUNNER_TEMP/step.log"; exit 1; }
+      - name: Sign
+        # With the upload keystore in the repository's secrets
+        # (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+        # ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD) when they are set, so each
+        # build installs over the last; otherwise with a key made for this
+        # build, which installs but cannot update an earlier one.
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          unsigned=$(find apps/shell/gen/android/app/build/outputs/apk -name '*-release-unsigned.apk' | head -n 1)
+          [ -n "$unsigned" ] || { echo "::error::no unsigned release APK was built"; exit 1; }
+          bt="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)"
+          ks="$RUNNER_TEMP/sign.jks"
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks"
+            echo "Signing with the upload key from the secrets."
+          else
+            KS_PASS=$(openssl rand -hex 16); KEY_PASS=$KS_PASS; KEY_ALIAS=blackcad
+            keytool -genkeypair -keystore "$ks" -storepass "$KS_PASS" -keypass "$KEY_PASS" -alias "$KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=BlackCAD test build" >/dev/null
+            echo "::notice::No signing secrets: the APK is signed with a key made for this build."
+          fi
+          mkdir -p dist-app
+          "$bt/zipalign" -P 16 -f 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" sign --ks "$ks" --ks-pass "pass:$KS_PASS" --ks-key-alias "$KEY_ALIAS" --key-pass "pass:$KEY_PASS" \
+            --out dist-app/BlackCAD-android.apk "$RUNNER_TEMP/aligned.apk"
+          "$bt/apksigner" verify --print-certs dist-app/BlackCAD-android.apk
+          rm -f "$ks"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: blackcad-app-android
+          path: dist-app/BlackCAD-android.apk
+          if-no-files-found: error
 
   pages:
     # The web app and BlackCAD.html published from main once every job has
@@ -263,7 +356,7 @@ jobs:
     # which GitHub Pages serves (Settings → Pages → Build and deployment:
     # Deploy from a branch, gh-pages, / (root)).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, msrv, android, web, desktop]
+    needs: [build, msrv, android, web, app, app-android]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -272,7 +365,7 @@ jobs:
       cancel-in-progress: false
     env:
       # The custom domain, for this repository only (forks publish without one).
-      PAGES_DOMAIN: ${{ github.repository == 'withshalom/CAD' && 'cad.mosaiciron.com' || '' }}
+      PAGES_DOMAIN: ${{ github.repository == 'withshalom/blackcad' && 'cad.mosaiciron.com' || '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v8
@@ -293,15 +386,15 @@ jobs:
 
   release:
     # The downloads of the latest main, once every job has passed: the
-    # command-line builds, the desktop app, the Android APK, the web app and
-    # BlackCAD.html, as
+    # app's installers for Windows, macOS, Linux and Android, the command-line
+    # builds, the Android test viewer, the web app and BlackCAD.html, as
     # the files of one pre-release tagged main-latest, replaced on each push
     # (package-release.sh names the files, publish-release.sh publishes them;
     # README.md "Download" links to them). It is not "latest", so it never
     # stands in for a numbered release: those are tags made by hand
     # (CONTRIBUTING.md).
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build, msrv, android, web, desktop]
+    needs: [build, msrv, android, web, app, app-android]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -321,8 +414,8 @@ jobs:
           path: artifacts
       - uses: actions/download-artifact@v8
         with:
-          # The desktop app for each system, in folders of their own names.
-          pattern: blackcad-desktop-*
+          # The app's installers for each system, in folders of their own names.
+          pattern: blackcad-app-*
           path: artifacts
       - uses: actions/download-artifact@v8
         with:

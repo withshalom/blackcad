@@ -1,10 +1,10 @@
 # BlackCAD — clean-room CAD software with its own `.cad` format and DWG fluency (draft)
 
 <p align="center">
-  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-desktop-windows-x86_64.zip"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-Download-0078D6?style=for-the-badge"></a>
-  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-desktop-macos-arm64.tar.gz"><img alt="Download for macOS (Apple silicon)" src="https://img.shields.io/badge/macOS-Download-333333?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-desktop-linux-x86_64.tar.gz"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-Download-E95420?style=for-the-badge&logo=linux&logoColor=white"></a>
-  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewer-android-debug.apk"><img alt="Download for Android" src="https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white"></a>
+  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-windows-x64-setup.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-Download-0078D6?style=for-the-badge"></a>
+  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-macos-universal.dmg"><img alt="Download for macOS" src="https://img.shields.io/badge/macOS-Download-333333?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-linux-x86_64.AppImage"><img alt="Download for Linux" src="https://img.shields.io/badge/Linux-Download-E95420?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-android.apk"><img alt="Download for Android" src="https://img.shields.io/badge/Android-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white"></a>
   <a href="https://cad.mosaiciron.com/"><img alt="Use it in your browser" src="https://img.shields.io/badge/Web-Use_in_browser-0e3463?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
 </p>
 
@@ -45,17 +45,27 @@ tags.
 
 | For | Download |
 |---|---|
-| Windows, macOS, Linux | The desktop app: [Windows x64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-desktop-windows-x86_64.zip) · [macOS, Apple silicon](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-desktop-macos-arm64.tar.gz) · [Linux x86_64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-desktop-linux-x86_64.tar.gz). The web workbench in its own window (needs Chrome, Edge, Brave or Chromium installed). Unpack it and run `blackcad`, or `blackcad drawing.dwg`. |
+| Windows | [Setup (.exe)](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-windows-x64-setup.exe) · [MSI](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-windows-x64.msi). Windows 10 and 11, x64. |
+| macOS | [BlackCAD.dmg](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-macos-universal.dmg), Apple silicon and Intel, macOS 10.15 and later. |
+| Linux | [AppImage](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-linux-x86_64.AppImage) · [.deb](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-linux-amd64.deb) · [.rpm](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-linux-x86_64.rpm), x86_64. |
+| Android | [BlackCAD.apk](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-android.apk), Android 7 and later. |
 | A browser, nothing to install | [**BlackCAD.html**](https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD.html), the whole workbench in one file: double-click it. Or use the app at <https://cad.mosaiciron.com/> |
 | Hosting or installing the web app | [blackcad-web.zip](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-web.zip) |
-| Android | [CAD Viewer APK](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewer-android-debug.apk), a debug build: uninstall an earlier one first |
+| Android test viewer | [CAD Viewer APK](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-viewer-android-debug.apk), the older Java test app |
 | Command line (`cad`) | [Windows x64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-cli-windows-x86_64.zip) · [macOS, Apple silicon](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-cli-macos-arm64.tar.gz) · [Linux x86_64](https://github.com/withshalom/blackcad/releases/download/main-latest/blackcad-cli-linux-x86_64.tar.gz) |
 
 [`SHA256SUMS.txt`](https://github.com/withshalom/blackcad/releases/download/main-latest/SHA256SUMS.txt)
-lists the checksums. Nothing is code-signed yet, so Windows SmartScreen and
-macOS Gatekeeper warn about the desktop app and the command-line build: allow it once (on macOS,
-right-click it and choose Open). To draw and edit on a computer, use the
-[web app](#the-workspace-in-a-browser-pwa).
+lists the checksums.
+
+The Windows, macOS, Linux and Android downloads are **BlackCAD, the
+application**: one program on each system, the workbench in the system's
+own webview and the drafting engine compiled natively inside it, with the
+computer's full memory (`apps/shell`). It opens `.cad`, `.dwg` and `.dxf`
+files from the file manager and saves them in place.
+
+Nothing is code-signed yet, so Windows SmartScreen and macOS Gatekeeper
+warn the first time: allow it once (on macOS, right-click the app and
+choose Open).
 
 ## What's here
 
@@ -71,7 +81,9 @@ crates/cad-ffi/      bridge to the platform apps: the session (open drawings, un
 apps/web/            the BlackCAD workbench as a browser app (PWA), installable on desktop and Android;
                      published at https://cad.mosaiciron.com/ (apps/web/README.md)
 apps/cad-cli/        `cad`, a command-line test build
-apps/desktop/        the desktop app: serves the web workbench from inside one program and opens it in an app window
+apps/shell/          BlackCAD, the application for Windows, macOS, Linux and Android: the workbench in the
+                     system's webview, the engine native in the same process (Tauri 2; its own workspace,
+                     the one place with third-party crates)
 apps/android/        CAD Viewer, an Android test app (Java, Android's own APIs only)
 xtask/               `cargo xtask web`/`serve`: builds and serves the browser app;
                      `cargo xtask android`: builds the core for the Android app
@@ -383,7 +395,7 @@ and `--example native_bench` for size and speed on 200,000 entities
   and table/leader styles from the model. Password-protected drawings and
   signatures (the format reserves the flags). Paper-space drafting.
 - Apps: the Android viewer only views; saving from it needs the storage
-  design in `docs/ARCHITECTURE.md`. The desktop app wraps the web workbench (`apps/desktop`); no iOS app yet, and the Android app is still the test viewer (see `docs/DESIGN-DECISIONS.md`).
+  design in `docs/ARCHITECTURE.md`. The application (`apps/shell`) runs the web workbench in the system's webview with the engine native; no iOS build yet (see `docs/NATIVE-APP-ADVICE.md`).
 - Unmodelled fields of decoded DWG objects are not kept in `.cad` yet.
   Hatch patterns (outlines only), TrueType fonts, angular and ordinate
   dimensions without a block, dimension styles from DWG.

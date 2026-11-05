@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BlackCAD",
+  "mainBinaryName": "blackcad",
+  "identifier": "withshalom.blackcad",
+  "build": {
+    "frontendDist": "../../dist/web",
+    "beforeBuildCommand": "cargo xtask web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "WithShalom",
+    "copyright": "WithShalom. MIT OR Apache-2.0.",
+    "category": "GraphicsAndDesign",
+    "shortDescription": "Drafting that opens DWG, DXF and .cad",
+    "longDescription": "BlackCAD: 2D drafting that opens and saves DWG, DXF and its own .cad format, with a blackboard of drafting and shop lessons beside the drawing.",
+    "homepage": "https://cad.mosaiciron.com/",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["cad"],
+        "name": "BlackCAD drawing",
+        "description": "BlackCAD drawing",
+        "role": "Editor",
+        "mimeType": "application/x-blackcad"
+      },
+      {
+        "ext": ["dwg"],
+        "name": "DWG drawing",
+        "description": "DWG drawing",
+        "role": "Editor",
+        "mimeType": "image/vnd.dwg"
+      },
+      {
+        "ext": ["dxf"],
+        "name": "DXF drawing",
+        "description": "DXF drawing",
+        "role": "Editor",
+        "mimeType": "image/vnd.dxf"
+      }
+    ],
+    "windows": {
+      "wix": {
+        "upgradeCode": "77e3cb85-a937-4e35-877e-ea6992de2aef"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "linux": {
+      "deb": {
+        "section": "graphics"
+      }
+    }
+  }
+}

@@ -8,7 +8,18 @@ Code from other projects
 Code taken from another project is listed here with its source repository,
 revision, files, author and license, and keeps its own notice in the file.
 
-None at present. The desktop app that was written with the help of CADCraft's
+None at present.
+
+Dependencies
+------------
+The application shell (apps/shell) is built with Tauri 2 and its dialog,
+fs, opener and single-instance plugins (MIT OR Apache-2.0, the Tauri
+Programme within The Commons Conservancy and Tauri contributors), and the
+crates they depend on, each under its own licence as listed in
+apps/shell/Cargo.lock; the shipped app includes them. The engine crates
+use only the Rust standard library. See docs/PROVENANCE.md.
+
+Removed: the desktop app that was written with the help of CADCraft's
 egui canvas (MIT OR Apache-2.0, ArtCraft Team and CADCraft contributors) and
 the egui, eframe and rfd crates has been removed from this repository; its
 history is the branch archive/egui-viewport, and its NOTICE entries are in
