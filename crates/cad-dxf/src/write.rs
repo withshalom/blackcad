@@ -1666,11 +1666,13 @@ impl<'a> Writer<'a> {
         }
     }
 
-    /// MTEXT contents: groups 3 for each 250-character chunk but the last,
-    /// which is group 1.
+    /// MTEXT contents: groups 3 for each chunk of at most 250 characters but
+    /// the last, which is group 1. A chunk never ends inside an escape
+    /// (`\P`, `\U+00D8`, `\M+1814A`) or between the two halves of a
+    /// character written as a surrogate pair (`\U+D83D\U+DE00`), so a
+    /// reader that decodes each group on its own still reads the text.
     fn mtext_contents(&mut self, s: &str) {
-        let chars: Vec<char> = s.chars().collect();
-        let mut chunks: Vec<String> = chars.chunks(250).map(|c| c.iter().collect()).collect();
+        let mut chunks = mtext_chunks(s, 250);
         if chunks.is_empty() {
             chunks.push(String::new());
         }
@@ -2281,4 +2283,94 @@ pub(super) fn visual_style(d: &Drawing, name: &str) -> Handle {
         })
         .map(|o| o.handle)
         .unwrap_or(Handle::NULL)
+}
+
+/// `s` cut into chunks of at most `max` characters, each cut between two
+/// whole MTEXT tokens: a `\U+XXXX` escape (with its low half when it is the
+/// high half of a surrogate pair), a `\M+NXXXX` escape, a backslash and the
+/// character it escapes, or one plain character. A single token longer
+/// than `max` (only with a tiny `max`) gets a chunk of its own.
+fn mtext_chunks(s: &str, max: usize) -> Vec<String> {
+    let chars: Vec<char> = s.chars().collect();
+    let is_hex = |c: Option<&char>| c.is_some_and(|c| c.is_ascii_hexdigit());
+    let unicode_at = |i: usize| -> Option<u32> {
+        let tag = chars.get(i..i + 3)?;
+        if tag != ['\\', 'U', '+'] || !(3..7).all(|k| is_hex(chars.get(i + k))) {
+            return None;
+        }
+        let hex: String = chars.get(i + 3..i + 7)?.iter().collect();
+        u32::from_str_radix(&hex, 16).ok()
+    };
+    let token_len = |i: usize| -> usize {
+        if chars.get(i) != Some(&'\\') {
+            return 1;
+        }
+        if let Some(u) = unicode_at(i) {
+            let low_follows = unicode_at(i + 7).is_some_and(|l| (0xDC00..0xE000).contains(&l));
+            return if (0xD800..0xDC00).contains(&u) && low_follows { 14 } else { 7 };
+        }
+        let multibyte = chars.get(i + 1..i + 3) == Some(&['M', '+'][..])
+            && is_hex(chars.get(i + 3))
+            && (4..8).all(|k| is_hex(chars.get(i + k)));
+        if multibyte {
+            return 8;
+        }
+        if i + 1 < chars.len() { 2 } else { 1 }
+    };
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    let mut len = 0;
+    let mut i = 0;
+    while i < chars.len() {
+        let n = token_len(i).min(chars.len() - i);
+        if len > 0 && len + n > max {
+            chunks.push(std::mem::take(&mut current));
+            len = 0;
+        }
+        current.extend(&chars[i..i + n]);
+        len += n;
+        i += n;
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    chunks
+}
+
+#[cfg(test)]
+mod mtext_chunk_tests {
+    use super::mtext_chunks;
+
+    #[test]
+    fn chunks_are_whole_and_rejoin() {
+        let pair = "\\U+00D8\\U+D83D\\U+DE00";
+        let s: String = pair.repeat(200);
+        let chunks = mtext_chunks(&s, 250);
+        assert_eq!(chunks.concat(), s);
+        for c in &chunks {
+            assert!(c.chars().count() <= 250);
+            // Each chunk is a whole number of escapes: starts with one,
+            // and no high half is left without its low half.
+            assert!(c.starts_with("\\U+"), "{c}");
+            assert!(!c.ends_with("\\U+D83D"), "{c}");
+            assert!(c.ends_with("\\U+00D8") || c.ends_with("\\U+DE00"), "{c}");
+        }
+    }
+
+    #[test]
+    fn escapes_and_plain_text_stay_whole() {
+        let s = format!("{}\\P{}\\M+1814A", "a".repeat(249), "b".repeat(240));
+        let chunks = mtext_chunks(&s, 250);
+        assert_eq!(chunks.concat(), s);
+        assert_eq!(chunks[0], "a".repeat(249), "\\P is not split from its backslash");
+        assert!(chunks.iter().all(|c| c.chars().count() <= 250));
+        assert!(chunks.iter().any(|c| c.ends_with("\\M+1814A")));
+    }
+
+    #[test]
+    fn short_and_empty_contents() {
+        assert_eq!(mtext_chunks("", 250), Vec::<String>::new());
+        assert_eq!(mtext_chunks("abc", 250), vec!["abc".to_string()]);
+        assert_eq!(mtext_chunks("ends with \\", 250), vec!["ends with \\".to_string()]);
+    }
 }
