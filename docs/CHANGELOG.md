@@ -1,6 +1,25 @@
 # Changelog
 
 ## Unreleased
+- BlackCAD is an application for Windows, macOS, Linux and Android
+  (`apps/shell`, Tauri 2): the workbench runs in the system's own webview and
+  the Rust engine runs natively in the same process, with the computer's
+  memory and threads, instead of as WebAssembly in a browser. It opens
+  `.cad`, `.dwg` and `.dxf` from the file manager (one window takes them all),
+  saves in place through the system's dialogs, prints through the system's
+  PDF viewer, and asks before closing with unsaved drawings. CI builds a
+  Windows setup and MSI, a universal macOS DMG, a Linux AppImage, .deb and
+  .rpm, and an Android APK; the `main-latest` release offers them. It
+  replaces the desktop launcher (`apps/desktop`), which opened the web
+  workbench in Chrome, Edge or Brave and is removed.
+- The workbench's calls into the core are asynchronous (`apps/web/core.js`),
+  one interface over three engines: the app's native one, core.wasm in a
+  Worker on the web, core.wasm on the page's thread for the single file.
+  Inside the app the interface speaks of "this computer", not "this
+  browser", and has no browser context menu, reload keys or install button
+  (`apps/web/host.js`).
+- The pages job writes the cad.mosaiciron.com CNAME again: it had looked
+  for the repository's old name since the rename.
 - The desktop app (`apps/desktop`): one std-only program with the web workbench
   embedded, served on 127.0.0.1 and opened in an app window of the
   Chromium-based browser on the computer; drawings given on the command line

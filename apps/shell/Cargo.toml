@@ -1,0 +1,47 @@
+[package]
+name = "blackcad-app"
+description = "BlackCAD for Windows, macOS, Linux and Android: the workbench in the system's webview, the Rust engine native in the same process"
+# Kept equal to [workspace.package] version in the root Cargo.toml
+# (checked by `cargo xtask` tests and CI).
+version = "0.17.0"
+edition = "2024"
+rust-version = "1.87"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Its own workspace: this is the one place in the repository with
+# third-party crates (Tauri and its plugins, MIT OR Apache-2.0; see
+# docs/PROVENANCE.md and NOTICE). The engine crates it uses stay std-only.
+[workspace]
+
+[lib]
+name = "blackcad_app_lib"
+# staticlib and cdylib: the Android and iOS builds load the app as a library.
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "blackcad"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+cad-ffi = { path = "../../crates/cad-ffi" }
+cad-core = { path = "../../crates/cad-core" }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"

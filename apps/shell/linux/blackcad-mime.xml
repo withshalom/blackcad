@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BlackCAD's own drawing format (.cad), so file managers can open it with
+     BlackCAD. DWG and DXF already have types in shared-mime-info. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-blackcad">
+    <comment>BlackCAD drawing</comment>
+    <glob pattern="*.cad"/>
+    <!-- Every .cad file begins with these eight bytes (docs/FORMAT.md). -->
+    <magic priority="80">
+      <match type="string" offset="0" value="\x89CAD\r\n\x1a\n"/>
+    </magic>
+  </mime-type>
+</mime-info>

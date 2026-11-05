@@ -130,6 +130,26 @@ hashbrown, rustc-demangle, dlmalloc, backtrace). None of those sources are
 in this repository, none of this project's code was taken from them, and
 a build on any machine with normal internet access uses rustup's copy.
 
+## The application shell's dependencies (`apps/shell`)
+
+BlackCAD the application (Windows, macOS, Linux, Android) is a small Rust
+program, `apps/shell`, around the engine and the web workbench. It is
+built with **Tauri 2** (github.com/tauri-apps/tauri) and its dialog, fs,
+opener and single-instance plugins, all MIT OR Apache-2.0, with their own
+dependencies (wry, tao, serde, serde_json and the crates those use; the
+full list is `apps/shell/Cargo.lock`). They are dependencies, used as
+published; no code was copied from them into this repository.
+
+They are confined to `apps/shell`, which is a Cargo workspace of its own
+(excluded from the root workspace), so the engine crates (`cad-model`,
+`cad-dwg`, `cad-dxf`, `cad-native`, `cad-core`, `cad-ffi`) still build
+with the Rust standard library only, and `cargo tree` in the root
+workspace still lists no third-party crate. The shell's own code
+(`apps/shell/src`) was written for this project. Each platform's webview
+(WebView2, WKWebView, WebKitGTK, Android System WebView) is part of the
+system, not shipped by this project, except that the Windows installer can
+download Microsoft's WebView2 runtime when it is missing.
+
 ## Third-party code considered and rejected
 
 **acadrust** (crates.io, MPL-2.0, a Rust DWG/DXF reader and writer) was

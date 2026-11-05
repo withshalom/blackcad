@@ -8,9 +8,11 @@ members = [
     "crates/cad-core",
     "crates/cad-ffi",
     "apps/cad-cli",
-    "apps/desktop",
     "xtask",
 ]
+# The app (Tauri 2) is a workspace of its own: the one place with
+# third-party crates. See apps/shell/Cargo.toml.
+exclude = ["apps/shell"]
 
 [workspace.package]
 version = "0.17.0"
