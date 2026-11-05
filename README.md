@@ -1,4 +1,11 @@
-# BlackCAD — clean-room CAD software with its own `.cad` format and DWG fluency (draft)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/blackcad-logo-dark.svg">
+    <img src="docs/images/blackcad-logo.svg" height="140" alt="BlackCAD: a large handwritten B in white chalk on black model space with a light grey grid and yellow centerlines, beside the name BlackCAD with Black in chalk and CAD in bold outlined letters">
+  </picture>
+</p>
+
+<p align="center"><b>Clean-room CAD software with its own <code>.cad</code> format and DWG fluency (draft).</b></p>
 
 <p align="center">
   <a href="https://github.com/withshalom/blackcad/releases/download/main-latest/BlackCAD-windows-x64-setup.exe"><img alt="Download for Windows" src="https://img.shields.io/badge/Windows-Download-0078D6?style=for-the-badge"></a>

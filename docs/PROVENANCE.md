@@ -150,6 +150,16 @@ workspace still lists no third-party crate. The shell's own code
 system, not shipped by this project, except that the Windows installer can
 download Microsoft's WebView2 runtime when it is missing.
 
+## The logo and icon
+
+BlackCAD's icon and logo (`docs/images/blackcad-*.svg`, `apps/web/icons/`,
+`apps/shell/icons/`) are original artwork made for this project by
+`tools/brand/blackcad_logo.py`. Their letters are outlines of glyphs from
+two fonts under the SIL Open Font License 1.1: the handwritten B and
+"Black" from **Patrick Hand** (Patrick Wagesreiter), "CAD" from **Inter**
+(The Inter Project Authors). The fonts are not in the repository or the
+apps; only the outlines of those few letters are.
+
 ## Third-party code considered and rejected
 
 **acadrust** (crates.io, MPL-2.0, a Rust DWG/DXF reader and writer) was
