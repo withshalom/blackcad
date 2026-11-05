@@ -9,7 +9,9 @@
 mod engine;
 mod files;
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+#[cfg(desktop)]
+use tauri::Manager;
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 /// The name host.js knows this system by.
 fn platform() -> &'static str {
@@ -28,16 +30,14 @@ fn platform() -> &'static str {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default();
+    let builder = tauri::Builder::default();
 
     // A drawing opened with BlackCAD while it runs goes to the window that
     // is open, not a second copy of the program.
     #[cfg(desktop)]
-    {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            files::open_later(app, files::drawings_in(args.into_iter().skip(1)));
-        }));
-    }
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        files::open_later(app, files::drawings_in(args.into_iter().skip(1)));
+    }));
 
     let app = builder
         .plugin(tauri_plugin_dialog::init())

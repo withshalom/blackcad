@@ -4,12 +4,11 @@
 //! viewer, and the drawings the app was opened with.
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request, Response};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use tauri_plugin_fs::{FsExt, OpenOptions};
 
@@ -31,18 +30,20 @@ fn picked(p: &FilePath) -> Picked {
     let path = p.to_string();
     let name = match p {
         FilePath::Path(pb) => pb.file_name().map(|n| n.to_string_lossy().into_owned()),
-        FilePath::Url(u) => u.path_segments().and_then(|mut s| s.next_back()).map(|s| percent_decode(s)),
+        FilePath::Url(u) => u.path_segments().and_then(|mut s| s.next_back()).map(percent_decode),
     }
     .unwrap_or_else(|| "drawing".into());
     Picked { name, path }
 }
 
 /// The drawings in a list of program arguments (what a file manager passes
-/// when a drawing is opened with BlackCAD).
+/// when a drawing is opened with BlackCAD). Phones open files through the
+/// app's own dialog.
+#[cfg(desktop)]
 pub fn drawings_in(args: impl IntoIterator<Item = String>) -> Vec<Picked> {
     args.into_iter()
         .filter(|a| !a.starts_with('-'))
-        .map(PathBuf::from)
+        .map(std::path::PathBuf::from)
         .filter(|p| {
             p.extension()
                 .map(|e| DRAWINGS.contains(&e.to_string_lossy().to_ascii_lowercase().as_str()))
@@ -54,11 +55,15 @@ pub fn drawings_in(args: impl IntoIterator<Item = String>) -> Vec<Picked> {
 }
 
 /// Drawings opened with the app while it runs: the workbench opens them.
+#[cfg(desktop)]
 pub fn open_later<R: Runtime>(app: &AppHandle<R>, files: Vec<Picked>) {
     if files.is_empty() {
         return;
     }
+    use tauri::Emitter;
     let _ = app.emit("open-files", files);
+    // A window on a computer comes forward; a phone shows its one app anyway.
+    #[cfg(desktop)]
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
         let _ = w.set_focus();
