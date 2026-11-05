@@ -71,3 +71,39 @@ fn an_object_missing_from_the_file_is_found() {
     said.left_out.insert(t.clone(), 1);
     assert!(cad_core::dwg::write::check(&other, &said).unwrap().is_whole());
 }
+
+/// The table style's groups in the order another program writes them
+/// (each border kind for all six borders, then the next kind), with
+/// AutoCAD's default margins.
+fn table_style_reordered(d: &mut Drawing) -> Handle {
+    let o = d.objects.values_mut().find(|o| o.type_name == "TABLESTYLE").expect("a table style");
+    let ObjectKind::NonGraphic(NonGraphic::Groups(g)) = &mut o.kind else { panic!("{:?}", o.kind) };
+    // Border groups 274–279, 284–289 and 64–69 of each row: kind by kind.
+    let border = |c: u16| (274..=279).contains(&c) || (284..=289).contains(&c) || (64..=69).contains(&c);
+    let mut items = Vec::new();
+    let mut row: Vec<(u16, XrValue)> = Vec::new();
+    for item in g.items.drain(..) {
+        if border(item.0) {
+            row.push(item);
+            continue;
+        }
+        if !row.is_empty() {
+            row.sort_by_key(|(c, _)| match c { 274..=279 => 0, 284..=289 => 1, _ => 2 });
+            items.append(&mut row);
+        }
+        items.push(item);
+    }
+    row.sort_by_key(|(c, _)| match c { 274..=279 => 0, 284..=289 => 1, _ => 2 });
+    items.append(&mut row);
+    g.items = items;
+    o.handle
+}
+
+#[test]
+fn groups_in_another_programs_order_read_back_whole() {
+    let mut d = mi201();
+    let h = table_style_reordered(&mut d);
+    let out = write(&d);
+    let c = cad_core::dwg::write::check(&d, &out).unwrap();
+    assert!(c.is_whole(), "{:X}: {c:?}", h.0);
+}

@@ -102,13 +102,23 @@ fn first_difference(a: &Object, b: &Object) -> Option<&'static str> {
 
 /// Whether `b` holds everything `a` does. An object kept as its DXF
 /// groups may come back with groups the file's version adds (a 2018 file
-/// stores fields an older DXF had no place for); it holds the same as
-/// long as every group written comes back, in order.
+/// stores fields an older DXF had no place for), and in the order the
+/// reader gives them, which is AutoCAD's: a table style's border groups,
+/// for one, come back row by row rather than kind by kind. It holds the
+/// same as long as every group written comes back, as often as it was
+/// written.
 fn same_data(a: &ObjectKind, b: &ObjectKind) -> bool {
     match (a, b) {
         (ObjectKind::NonGraphic(NonGraphic::Groups(ga)), ObjectKind::NonGraphic(NonGraphic::Groups(gb))) => {
-            let mut rest = gb.items.iter();
-            ga.kind == gb.kind && ga.items.iter().all(|item| rest.any(|x| x == item))
+            let mut left: Vec<&(u16, XrValue)> = gb.items.iter().collect();
+            ga.kind == gb.kind
+                && ga.items.iter().all(|item| match left.iter().position(|x| *x == item) {
+                    Some(i) => {
+                        left.swap_remove(i);
+                        true
+                    }
+                    None => false,
+                })
         }
         _ => a == b,
     }
